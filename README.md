@@ -1,1 +1,2 @@
 # SparkDistributedMatrix
+This is a research project which aims to provide high performance support for distributed matrix algebra on Apache Spark system. Several distributed matrix format, such as distributed vectors and block partitioned matrices are extensions to the MLlib of Apache Spark machine learning library. For example, several partition schemes are implemented, i.e., MatrixRangePartitioner, MatrixRangeGreedyPartitioner, and BlockCyclicPartitioner.

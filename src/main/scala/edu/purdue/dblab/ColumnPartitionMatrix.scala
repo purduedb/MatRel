@@ -50,6 +50,14 @@ class ColumnPartitionMatrix (
 
     def t: RowPartitionMatrix = transpose()
 
+    /*
+     * *: provides scalar multiplication with a column partition matrix
+     */
+    def *:(alpha: Double): ColumnPartitionMatrix = {
+        val rdd = cols.map(col => Column(col.cid, LocalVector.multiplyScalar(alpha, col.cvec)))
+        new ColumnPartitionMatrix(rdd, _nrows, _ncols)
+    }
+
     def %*%(dvec: DistributedVector, numPart: Int = 8): DistributedVector = {
         multiplyDvec(dvec, numPart)
     }

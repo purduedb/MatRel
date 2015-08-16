@@ -96,12 +96,17 @@ class DistributedVector(val entries: RDD[dvEntry],
   def multiply(alpha: Double): DistributedVector = {
     new DistributedVector(multiplyScalar(alpha), _size)
   }
+
+  def *:(alpha: Double): DistributedVector = {
+    new DistributedVector(multiplyScalar(alpha), _size)
+  }
+
   private def multiplyScalar(alpha: Double): RDD[dvEntry] = {
     entries.map(x => dvEntry(x.idx, x.v * alpha))
   }
 
   def *(alpha: Double): DistributedVector = {
-    multiply(alpha)
+    new DistributedVector(multiplyScalar(alpha), _size)
   }
 
   /*
@@ -114,6 +119,14 @@ class DistributedVector(val entries: RDD[dvEntry],
 
   def /(alpha: Double): DistributedVector = {
     divide(alpha)
+  }
+
+  /*
+   * /: operator compute element-wise division of alpha over each element of the vector
+   */
+  def /:(alpha: Double): DistributedVector = {
+    val rdd = entries.map(x => dvEntry(x.idx, alpha / x.v))
+    new DistributedVector(rdd, _size)
   }
 
   /*
@@ -240,6 +253,10 @@ object TestDistributedVector {
       val rdd = sc.parallelize(list, 3)
       var y = DistributedVector.OnesVector(rdd)
       println(y.size)
+      val x = 10 *: distVector1
+      x.display()
+      val z = 100 /: distVector1
+      z.display()
       sc.stop()
   }
 }

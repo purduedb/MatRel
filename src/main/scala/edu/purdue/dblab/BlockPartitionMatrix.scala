@@ -162,6 +162,10 @@ class BlockPartitionMatrix (
         multiplyScalar(alpha)
     }
 
+    def *:(alpha: Double): BlockPartitionMatrix = {
+        multiplyScalar(alpha)
+    }
+
     def multiplyScalar(alpha: Double): BlockPartitionMatrix = {
         val rdd = blocks.map {
             case ((rowIdx, colIdx), mat) => ((rowIdx, colIdx), LocalMatrix.multiplyScalar(alpha, mat))
@@ -555,7 +559,7 @@ object TestBlockPartition {
         val v = new BlockPartitionMatrix(vecRdd, 3, 3, 6, 1).multiplyScalar(1.0 / 6)
         val alpha = 0.85
         for (i <- 0 until 10) {
-            x = (matrix %*% x) * alpha + (v * (1.0-alpha), (3,3))
+            x = alpha *: (matrix %*% x) + ((1.0-alpha) *: v, (3,3))
             //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (3,3))
         }
         println(x.toLocalMatrix())

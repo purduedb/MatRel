@@ -55,6 +55,14 @@ class RowPartitionMatrix (
 
     def t: ColumnPartitionMatrix = transpose()
 
+    /*
+     * *: provides scalar multiplication with a row partitioned matrix
+     */
+    def *:(alpha: Double): RowPartitionMatrix = {
+        val rdd = rows.map(row => Row(row.ridx, LocalVector.multiplyScalar(alpha, row.rvec)))
+        new RowPartitionMatrix(rdd, _nrows, _ncols)
+    }
+
     def %*%(dvec: DistributedVector, numPart: Int = 8): DistributedVector = {
         multiplyDvec(dvec, numPart)
     }

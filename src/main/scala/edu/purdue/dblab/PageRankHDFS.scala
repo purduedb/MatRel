@@ -22,7 +22,7 @@ object PageRankHDFS {
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
       .set("spark.cores.max", "16")
-      .set("spark.executor.memory", "16g")
+      .set("spark.executor.memory", "8g")
     val sc = new SparkContext(conf)
     val coordinateRdd = genCoordinateRdd(sc, graphName)
     val matrix = RowPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd)

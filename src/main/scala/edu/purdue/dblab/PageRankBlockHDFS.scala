@@ -8,23 +8,22 @@ import org.apache.spark.{SparkContext, SparkConf}
  */
 object PageRankBlockHDFS {
   def main (args: Array[String]) {
-    if (args.length < 4) {
-      println("Usage: PageRank <master> <graph> <blk_row_size> <blk_col_size> [<iter>]")
+    if (args.length < 3) {
+      println("Usage: PageRank <graph> <blk_row_size> <blk_col_size> [<iter>]")
       System.exit(1)
     }
-    val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(1)
-    val blk_row_size = args(2).toInt
-    val blk_col_size = args(3).toInt
+    val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
+    val blk_row_size = args(1).toInt
+    val blk_col_size = args(2).toInt
     var niter = 0
-    if (args.length > 4) niter = args(4).toInt else niter = 10
+    if (args.length > 3) niter = args(3).toInt else niter = 10
     val conf = new SparkConf()
-      .setMaster(args(0))
       .setAppName("PageRank algorithm on block matrices")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
       .set("spark.cores.max", "32")
-      .set("spark.executor.memory", "32g")
+      .set("spark.executor.memory", "16g")
     val sc = new SparkContext(conf)
     val coordinateRdd = genCoordinateRdd(sc, graphName)
     val matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blk_row_size, blk_col_size)

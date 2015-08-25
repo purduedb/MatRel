@@ -9,21 +9,20 @@ import org.apache.spark.mllib.linalg._
  */
 object PageRankHDFS {
   def main (args: Array[String]) {
-    if (args.length < 2) {
-      println("Usage: PageRank <master> <graph> [<iter>]")
+    if (args.length < 1) {
+      println("Usage: PageRank <graph> [<iter>]")
       System.exit(1)
     }
-    val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(1)
+    val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
     var niter = 0
-    if (args.length > 2) niter = args(2).toInt else niter = 10
+    if (args.length > 1) niter = args(1).toInt else niter = 10
     val conf = new SparkConf()
-      .setMaster(args(0))
       .setAppName("PageRank algorithm")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "32")
-      .set("spark.executor.memory", "32g")
+      .set("spark.cores.max", "16")
+      .set("spark.executor.memory", "16g")
     val sc = new SparkContext(conf)
     val coordinateRdd = genCoordinateRdd(sc, graphName)
     val matrix = RowPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd)

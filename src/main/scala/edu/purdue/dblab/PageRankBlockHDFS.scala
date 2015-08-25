@@ -22,7 +22,7 @@ object PageRankBlockHDFS {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "32")
+      .set("spark.cores.max", "16")
       .set("spark.executor.memory", "16g")
     val sc = new SparkContext(conf)
     val coordinateRdd = genCoordinateRdd(sc, graphName)

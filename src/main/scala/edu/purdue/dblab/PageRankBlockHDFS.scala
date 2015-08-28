@@ -8,15 +8,15 @@ import org.apache.spark.{SparkContext, SparkConf}
  */
 object PageRankBlockHDFS {
   def main (args: Array[String]) {
-    if (args.length < 3) {
-      println("Usage: PageRank <graph> <blk_row_size> <blk_col_size> [<iter>]")
+    if (args.length < 1) {
+      println("Usage: PageRank <graph> [<iter>]")
       System.exit(1)
     }
     val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
-    val blk_row_size = args(1).toInt
-    val blk_col_size = args(2).toInt
+    //val blk_row_size = args(1).toInt
+    //val blk_col_size = args(2).toInt
     var niter = 0
-    if (args.length > 3) niter = args(3).toInt else niter = 10
+    if (args.length > 1) niter = args(1).toInt else niter = 10
     val conf = new SparkConf()
       .setAppName("PageRank algorithm on block matrices")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -26,14 +26,15 @@ object PageRankBlockHDFS {
       .set("spark.executor.memory", "8g")
     val sc = new SparkContext(conf)
     val coordinateRdd = genCoordinateRdd(sc, graphName)
-    val matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blk_row_size, blk_col_size)
-    val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blk_col_size, blk_col_size), 4)
-    var x = new BlockPartitionMatrix(vecRdd, blk_col_size, blk_col_size, matrix.nCols(), 1)
+    val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)
+    val matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
+    val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blkSize, blkSize), 4)
+    var x = new BlockPartitionMatrix(vecRdd, blkSize, blkSize, matrix.nCols(), 1)
     val v = x
     val alpha = 0.85
     val t1 = System.currentTimeMillis()
     for (i <- 0 until niter) {
-      x =  (matrix %*% x) * alpha + (v * (1.0 - alpha), (blk_col_size, blk_col_size))
+      x =  alpha *: (matrix %*% x) + ((1.0 - alpha) *: v, (blkSize, blkSize))
       //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (blk_col_size, blk_col_size))
     }
     //x.blocks.count()
@@ -48,8 +49,10 @@ object PageRankBlockHDFS {
     for (i <- 0 until 5) {
       println(result(i))
     }*/
+    var t2 = System.currentTimeMillis()
+    println("t2 - t1 = " + (t2-t1)/1000.0 + "sec")
     println(x.topK(5).mkString("\n"))
-    val t2 = System.currentTimeMillis()
+    t2 = System.currentTimeMillis()
     println("t2 - t1 = " + (t2-t1)/1000.0 + "sec")
     sc.stop()
   }

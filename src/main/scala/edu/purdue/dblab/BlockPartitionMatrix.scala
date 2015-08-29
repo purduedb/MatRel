@@ -3,10 +3,12 @@ package edu.purdue.dblab
 import org.apache.spark.{SparkContext, SparkConf, SparkException, Logging}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.serializer.KryoSerializer
 import org.apache.spark.mllib.linalg.{Matrix => MLMatrix, SparseMatrix, DenseMatrix}
 
 import scala.collection.mutable
 import scala.collection.mutable.{Map => MMap, ArrayBuffer}
+import breeze.linalg.{Matrix => BM}
 
 /**
  * Created by yongyangyu on 7/15/15.
@@ -442,7 +444,12 @@ class BlockPartitionMatrix (
                         Iterator()
                     }
                 }
-            .reduceByKey(resPartitioner, _ + _)
+            .combineByKey(
+                (x: BM[Double]) => x,
+                (acc: BM[Double], x) => acc + x,
+                (acc1: BM[Double], acc2: BM[Double]) => acc1 + acc2,
+                resPartitioner, true, null
+             )  //.reduceByKey(resPartitioner, _ + _)
             .mapValues(LocalMatrix.fromBreeze(_))
         new BlockPartitionMatrix(newBlks, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }

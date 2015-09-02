@@ -3,7 +3,6 @@ package edu.purdue.dblab
 import org.apache.spark.{SparkContext, SparkConf, SparkException, Logging}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.serializer.KryoSerializer
 import org.apache.spark.mllib.linalg.{Matrix => MLMatrix, SparseMatrix, DenseMatrix}
 
 import scala.collection.mutable
@@ -32,34 +31,6 @@ class BlockPartitionMatrix (
               nrows: Long,
               ncols: Long
               ) = this(blocks, ROWS_PER_BLK, COLS_PER_BLK, nrows, ncols, MMap[Int, Array[Int]](), MMap[Int, Array[Int]]())
-
-    def getRowCountMap(): MMap[Int, Array[Int]] = {
-        if (rowCountMap.size == 0) {
-            val countByRow = blocks.map {entry => entry._1}
-              .groupByKey()
-              .mapValues(iter => iter.toArray)
-              .collect
-            rowCountMap = MMap[Int, Array[Int]]()
-            for ((row, elemArray) <- countByRow) {
-                rowCountMap(row) = elemArray
-            }
-        }
-        rowCountMap
-    }
-
-    def getColCountMap(): MMap[Int, Array[Int]] = {
-        if (colCountMap.size == 0) {
-            val countByCol = blocks.map {entry => entry._1.swap}
-              .groupByKey()
-              .mapValues(iter => iter.toArray)
-              .collect
-            colCountMap = MMap[Int, Array[Int]]()
-            for ((col, elemArray) <- countByCol) {
-                colCountMap(col) = elemArray
-            }
-        }
-        colCountMap
-    }
 
     override def nRows(): Long = {
         if (nrows <= 0L) {
@@ -382,76 +353,61 @@ class BlockPartitionMatrix (
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
         s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         var rddB = other.blocks
-        var useOtherMatrix: Boolean = false
+        //var useOtherMatrix: Boolean = false
         if (COLS_PER_BLK != other.ROWS_PER_BLK) {
             logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
             rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK, COLS_PER_BLK, COLS_PER_BLK)
-            useOtherMatrix = true
+            //useOtherMatrix = true
         }
         // other.ROWS_PER_BLK = COLS_PER_BLK and square blk for other
         val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
-        val otherMatrix = new BlockPartitionMatrix(rddB, COLS_PER_BLK, COLS_PER_BLK, other.nRows(), other.nCols())
+        //val otherMatrix = new BlockPartitionMatrix(rddB, COLS_PER_BLK, COLS_PER_BLK, other.nRows(), other.nCols())
         val resPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, math.max(blocks.partitions.length, rddB.partitions.length))
 
-        // do not duplicate each block of A on each column of B if some blocks are empty
-        // to duplicate A, (rowId, array_of_cols)
-        val colMap = getColCountMap()
-
-        // to duplicate B, (colId, array_of_rows)
-        var rowMap: MMap[Int, Array[Int]] = null
-        if (useOtherMatrix) rowMap = otherMatrix.getRowCountMap()
-        else rowMap = other.getRowCountMap()
-        val flatA = blocks.flatMap{ case ((rowIdx, colIdx), blk) =>
-            // TODO: modify iterator
-            val rowArr = rowMap.getOrElse(colIdx, Array[Int]())
-            Iterator.tabulate(rowArr.size)(j => ((rowIdx, rowArr(j), colIdx), blk))
-            //Iterator.tabulate(OTHER_COL_BLK_NUM)(j => ((rowIdx, j, colIdx), blk))
-        }
-        val flatB = rddB.flatMap{ case ((rowIdx, colIdx), blk) =>
-            // TODO: modify iterator
-            val colArr = colMap.getOrElse(rowIdx, Array[Int]())
-            Iterator.tabulate(colArr.size)(i => ((colArr(i), colIdx, rowIdx), blk))
-            //Iterator.tabulate(ROW_BLK_NUM)(i => ((i, colIdx, rowIdx), blk))
-        }
-        val newBlks: RDD[MatrixBlk] = flatA.cogroup(flatB, resPartitioner)
-            .flatMap{ case ((rowIdx, colIdx, _), (a, b)) =>
-                    if (a.size > 1 || b.size > 1) {
-                        throw new SparkException("There are multiple blocks with indices: " +
-                        s"($rowIdx, $colIdx).")
-                    }
-                    if (a.nonEmpty && b.nonEmpty) {
-                        val c = (a.head, b.head) match {
-                            case (dm1: DenseMatrix, dm2: DenseMatrix) => dm1.multiply(dm2)
-                            case (dm: DenseMatrix, sp: SparseMatrix) => dm.multiply(sp.toDense)
-                            case (sp: SparseMatrix, dm: DenseMatrix) => sp.multiply(dm)
-                            case (sp1: SparseMatrix, sp2: SparseMatrix) =>
-                                val sparsity1 = sp1.values.length * 1.0 / (sp1.numRows * sp1.numCols)
-                                val sparsity2 = sp2.values.length * 1.0 / (sp2.numRows * sp2.numCols)
-                                if (sparsity1 > 0.1) {
-                                    sp1.toDense.multiply(sp2.toDense)
-                                }
-                                else if (sparsity2 > 0.1) {
-                                    sp1.multiply(sp2.toDense)
-                                }
-                                else {
-                                    LocalMatrix.multiplySparseSparse(sp1, sp2)
-                                }
-                            case _ => throw new SparkException(s"Unsupported matrix type ${b.head.getClass.getName}")
+        val rdd1 = blocks.map{ case ((rowIdx, colIdx), matA) =>
+            (colIdx, (rowIdx, matA))
+        }.groupByKey()
+        val rdd2 = rddB.map{ case ((rowIdx, colIdx), matB) =>
+            (rowIdx, (colIdx, matB))
+        }.groupByKey()
+        val rddC = rdd1.join(rdd2)
+                  .values
+                  .flatMap{ case (iterA, iterB) =>
+                    val product = new mutable.ListBuffer[((Int, Int), BM[Double])]()
+                    for (blk1 <- iterA) {
+                        for (blk2 <- iterB) {
+                            val idx = (blk1._1, blk2._1)
+                            val c = (blk1._2, blk2._2) match {
+                                case (dm1: DenseMatrix, dm2: DenseMatrix) => dm1.multiply(dm2)
+                                case (dm: DenseMatrix, sp: SparseMatrix) => dm.multiply(sp.toDense)
+                                case (sp: SparseMatrix, dm: DenseMatrix) => sp.multiply(dm)
+                                case (sp1: SparseMatrix, sp2: SparseMatrix) =>
+                                    val sparsity1 = sp1.values.length * 1.0 / (sp1.numRows * sp1.numCols)
+                                    val sparsity2 = sp2.values.length * 1.0 / (sp2.numRows * sp2.numCols)
+                                    if (sparsity1 > 0.1) {
+                                        sp1.toDense.multiply(sp2.toDense)
+                                    }
+                                    else if (sparsity2 > 0.1) {
+                                        sp1.multiply(sp2.toDense)
+                                    }
+                                    else {
+                                        LocalMatrix.multiplySparseSparse(sp1, sp2)
+                                    }
+                                case _ => throw new SparkException(s"Unsupported matrix type ${blk1._2.getClass.getName}")
+                            }
+                            product += ((idx, LocalMatrix.toBreeze(c)))
                         }
-                        Iterator(((rowIdx, colIdx), LocalMatrix.toBreeze(c)))
                     }
-                    else {
-                        Iterator()
-                    }
-                }
-            .combineByKey(
-                (x: BM[Double]) => x,
-                (acc: BM[Double], x) => acc + x,
-                (acc1: BM[Double], acc2: BM[Double]) => acc1 + acc2,
-                resPartitioner, true, null
-             )  //.reduceByKey(resPartitioner, _ + _)
-            .mapValues(LocalMatrix.fromBreeze(_))
-        new BlockPartitionMatrix(newBlks, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
+                    product
+                  }
+                  .combineByKey(
+                    (x: BM[Double]) => x,
+                    (acc: BM[Double], x) => acc + x,
+                    (acc1: BM[Double], acc2: BM[Double]) => acc1 + acc2,
+                    resPartitioner, true, null
+                  )
+                  .mapValues(LocalMatrix.fromBreeze(_))
+        new BlockPartitionMatrix(rddC, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }
 
     /*

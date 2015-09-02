@@ -24,6 +24,7 @@ object PageRankBlockHDFS {
       .set("spark.shuffle.compress", "false")
       .set("spark.cores.max", "16")
       .set("spark.executor.memory", "8g")
+      .set("spark.akka.frameSize", "64")
     val sc = new SparkContext(conf)
     val coordinateRdd = genCoordinateRdd(sc, graphName)
     val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)

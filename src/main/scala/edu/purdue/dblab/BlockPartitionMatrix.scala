@@ -373,7 +373,7 @@ class BlockPartitionMatrix (
         val rddC = rdd1.join(rdd2)
                   .values
                   .flatMap{ case (iterA, iterB) =>
-                    val product = new mutable.ListBuffer[((Int, Int), BM[Double])]()
+                    val product = mutable.ArrayBuffer[((Int, Int), BM[Double])]()
                     for (blk1 <- iterA) {
                         for (blk2 <- iterB) {
                             val idx = (blk1._1, blk2._1)

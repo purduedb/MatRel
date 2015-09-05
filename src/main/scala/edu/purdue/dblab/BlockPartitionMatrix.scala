@@ -1,6 +1,6 @@
 package edu.purdue.dblab
 
-import org.apache.spark.{SparkContext, SparkConf, SparkException, Logging}
+import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.mllib.linalg.{Matrix => MLMatrix, SparseMatrix, DenseMatrix}
@@ -409,6 +409,82 @@ class BlockPartitionMatrix (
                   .mapValues(LocalMatrix.fromBreeze(_))
         new BlockPartitionMatrix(rddC, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }
+
+    def multiplyDMAC(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+        require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
+          s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
+        var rddB = other.blocks
+        //var useOtherMatrix: Boolean = false
+        if (COLS_PER_BLK != other.ROWS_PER_BLK) {
+            logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
+            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK, COLS_PER_BLK, COLS_PER_BLK)
+            //useOtherMatrix = true
+        }
+        // other.ROWS_PER_BLK = COLS_PER_BLK and square blk for other
+        val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
+        //val otherMatrix = new BlockPartitionMatrix(rddB, COLS_PER_BLK, COLS_PER_BLK, other.nRows(), other.nCols())
+        //val resPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, math.max(blocks.partitions.length, rddB.partitions.length))
+
+        val nodes = 8
+
+        val aggregator = new Aggregator[(Int, Int), (MLMatrix, MLMatrix),
+          ArrayBuffer[(MLMatrix, MLMatrix)]](createCombiner, mergeValue, mergeCombiner)
+
+        val rdd1 = blocks.map{ case ((rowIdx, colIdx), matA) =>
+            (colIdx % nodes, (colIdx, rowIdx, matA))
+        }.groupByKey()
+        val rdd2 = rddB.map{ case ((rowIdx, colIdx), matB) =>
+            (rowIdx % nodes, (rowIdx, colIdx, matB))
+        }.groupByKey()
+
+        val rddC = rdd1.join(rdd2)
+                   .values.flatMap{ case (buf1, buf2) =>
+                        val cross = new ArrayBuffer[((Int, Int), (MLMatrix, MLMatrix))]()
+                        for (i <- buf1)
+                            for (j <- buf2) {
+                                if (i._1 == j._1)
+                                    cross.append(((i._2, j._2), (i._3, j._3)))
+                            }
+                        cross
+                   }.mapPartitionsWithContext((context, iter) => {
+                        new InterruptibleIterator(context, aggregator.combineValuesByKey(iter, context))
+                   }, true).map { case (index, buf) =>
+            var re_block: MLMatrix = null
+            for ((blk1, blk2) <- buf) {
+                val mul = (blk1, blk2) match {
+                    case (dm1: DenseMatrix, dm2: DenseMatrix) => dm1.multiply(dm2)
+                    case (dm: DenseMatrix, sp: SparseMatrix) => dm.multiply(sp.toDense)
+                    case (sp: SparseMatrix, dm: DenseMatrix) => sp.multiply(dm)
+                    case (sp1: SparseMatrix, sp2: SparseMatrix) =>
+                        val sparsity1 = sp1.values.length * 1.0 / (sp1.numRows * sp1.numCols)
+                        val sparsity2 = sp2.values.length * 1.0 / (sp2.numRows * sp2.numCols)
+                        if (sparsity1 > 0.1) {
+                            sp1.toDense.multiply(sp2.toDense)
+                        }
+                        else if (sparsity2 > 0.1) {
+                            sp1.multiply(sp2.toDense)
+                        }
+                        else {
+                            LocalMatrix.multiplySparseSparse(sp1, sp2)
+                        }
+                    case _ => throw new SparkException(s"Unsupported matrix type ${blk1.getClass.getName}")
+                }
+                re_block match {
+                    case null => re_block = mul
+                    case _ => re_block = LocalMatrix.add(mul, re_block)
+                }
+            }
+            (index, re_block)
+        }.reduceByKey(LocalMatrix.add(_, _))
+        new BlockPartitionMatrix(rddC, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
+    }
+
+    def createCombiner (v: (MLMatrix, MLMatrix)) = ArrayBuffer(v)
+
+    def mergeValue(cur: ArrayBuffer[(MLMatrix, MLMatrix)], v: (MLMatrix, MLMatrix)) = cur += v
+
+    def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMatrix, MLMatrix)]) = c1 ++ c2
+
 
     /*
      * Compute top-k largest elements from the block partitioned matrix.

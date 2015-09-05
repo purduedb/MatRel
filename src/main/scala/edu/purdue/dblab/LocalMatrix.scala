@@ -13,15 +13,22 @@ import scala.collection.mutable.ArrayBuffer
  */
 object LocalMatrix {
     def add(a: MLMatrix, b: MLMatrix): MLMatrix = {
-        require(a.numRows == b.numRows, s"Matrix A and B must have the same number of rows. But found " +
-        s"A.numRows = ${a.numRows}, B.numRows = ${b.numRows}")
-        require(a.numCols == b.numCols, s"Matrix A and B must have the same number of cols. But found " +
-        s"A.numCols = ${a.numCols}, B.numCols = ${b.numCols}")
-        (a, b) match {
-          case (ma: DenseMatrix, mb: DenseMatrix) => addDense(ma, mb)
-          case (ma: DenseMatrix, mb: SparseMatrix) => addDenseSparse(ma, mb)
-          case (ma: SparseMatrix, mb: DenseMatrix) => addDenseSparse(mb, ma)
-          case (ma: SparseMatrix, mb: SparseMatrix) => addSparseSparse(ma, mb)
+        if (a != null && b != null) {
+            require(a.numRows == b.numRows, s"Matrix A and B must have the same number of rows. But found " +
+              s"A.numRows = ${a.numRows}, B.numRows = ${b.numRows}")
+            require(a.numCols == b.numCols, s"Matrix A and B must have the same number of cols. But found " +
+              s"A.numCols = ${a.numCols}, B.numCols = ${b.numCols}")
+            (a, b) match {
+                case (ma: DenseMatrix, mb: DenseMatrix) => addDense(ma, mb)
+                case (ma: DenseMatrix, mb: SparseMatrix) => addDenseSparse(ma, mb)
+                case (ma: SparseMatrix, mb: DenseMatrix) => addDenseSparse(mb, ma)
+                case (ma: SparseMatrix, mb: SparseMatrix) => addSparseSparse(ma, mb)
+            }
+        }
+        else {
+            if (a != null && b == null) a
+            else if (a == null && b != null) b
+            else null
         }
     }
 
@@ -274,6 +281,138 @@ object LocalMatrix {
           case _ => throw new UnsupportedOperationException(s"Do not support conversion from type ${breeze.getClass.getName}")
         }
     }
+
+    def elementWiseMultiply(mat1: MLMatrix, mat2: MLMatrix): MLMatrix = {
+        require(mat1.numRows == mat2.numRows, s"mat1.numRows = ${mat1.numRows}, mat2.numRows = ${mat2.numRows}")
+        require(mat1.numCols == mat2.numCols, s"mat1.numCols = ${mat1.numCols}, mat2.numCols = ${mat2.numCols}")
+        (mat1, mat2) match {
+            case (ma: DenseMatrix, mb: DenseMatrix) => elementWiseOpDenseDense(ma, mb)
+            case (ma: DenseMatrix, mb: SparseMatrix) => elementWiseOpDenseSparse(ma, mb)
+            case (ma: SparseMatrix, mb: DenseMatrix) => elementWiseOpDenseSparse(mb, ma)
+            case (ma: SparseMatrix, mb: SparseMatrix) => elementWiseOpSparseSparse(ma, mb)
+        }
+    }
+
+    def elementWiseDivide(mat1: MLMatrix, mat2: MLMatrix): MLMatrix = {
+        require(mat1.numRows == mat2.numRows, s"mat1.numRows = ${mat1.numRows}, mat2.numRows = ${mat2.numRows}")
+        require(mat1.numCols == mat2.numCols, s"mat1.numCols = ${mat1.numCols}, mat2.numCols = ${mat2.numCols}")
+        (mat1, mat2) match {
+            case (ma: DenseMatrix, mb: DenseMatrix) => elementWiseOpDenseDense(ma, mb, 1)
+            case (ma: DenseMatrix, mb: SparseMatrix) => elementWiseOpDenseSparse(ma, mb, 1)
+            case (ma: SparseMatrix, mb: DenseMatrix) => elementWiseOpDenseSparse(mb, ma, 1)
+            case (ma: SparseMatrix, mb: SparseMatrix) => elementWiseOpSparseSparse(ma, mb, 1)
+        }
+    }
+
+    // op = 0 -- multiplication, op = 1 -- division
+    private def elementWiseOpDenseDense(ma: DenseMatrix, mb: DenseMatrix, op: Int = 0) = {
+        val (arr1, arr2) = (ma.toArray, mb.toArray)
+        val arr = Array.fill(arr1.length)(0.0)
+        for (i <- 0 until arr.length) {
+            if (op == 0) {
+                arr(i) = arr1(i) * arr2(i)
+            }
+            else {
+                arr(i) = arr1(i) / arr2(i)
+            }
+        }
+        new DenseMatrix(ma.numRows, ma.numCols, arr)
+    }
+
+    private def elementWiseOpDenseSparse(ma: DenseMatrix, mb: SparseMatrix, op: Int = 0) = {
+        val (arr1, arr2) = (ma.toArray, mb.toArray)
+        val arr = Array.fill(arr1.length)(0.0)
+        for (i <- 0 until arr.length) {
+            if (op == 0) {
+                arr(i) = arr1(i) * arr2(i)
+            }
+            else {
+                arr(i) = arr1(i) / arr2(i)
+            }
+        }
+        new DenseMatrix(ma.numRows, ma.numCols, arr)
+    }
+
+    private def elementWiseOpSparseSparse(ma: SparseMatrix, mb: SparseMatrix, op: Int = 0) = {
+        if (ma.isTransposed || mb.isTransposed) {
+            val (arr1, arr2) = (ma.toArray, mb.toArray)
+            val arr = Array.fill(arr1.length)(0.0)
+            var nnz = 0
+            for (i <- 0 until arr.length) {
+                if (op == 0) {
+                    arr(i) = arr1(i) * arr2(i)
+                }
+                else {
+                    arr(i) = arr1(i) / arr2(i)
+                }
+                if (arr(i) != 0) nnz += 1
+            }
+            val c = new DenseMatrix(ma.numRows, ma.numCols, arr)
+            if (c.numRows * c.numCols > nnz * 2 + c.numCols + 1) {
+                c.toSparse
+            }
+            else {
+                c
+            }
+        }
+        else {
+            elementWiseOpSparseSparseNative(ma, mb, op)
+        }
+    }
+
+    def elementWiseOpSparseSparseNative(ma: SparseMatrix, mb: SparseMatrix, op: Int = 0): MLMatrix = {
+        require(ma.numRows == mb.numRows, s"Matrix A.numRows must be equal to B.numRows, but found " +
+          s"A.numRows = ${ma.numRows}, B.numRows = ${mb.numRows}")
+        require(ma.numCols == mb.numCols, s"Matrix A.numCols must be equal to B.numCols, but found " +
+          s"A.numCols = ${ma.numCols}, B.numCols = ${mb.numCols}")
+        val va = ma.values
+        val rowIdxa = ma.rowIndices
+        val colPtra = ma.colPtrs
+        val vb = mb.values
+        val rowIdxb = mb.rowIndices
+        val colPtrb = mb.colPtrs
+        val vc = ArrayBuffer[Double]()
+        val rowIdxc = ArrayBuffer[Int]()
+        val colPtrc = new Array[Int](ma.numCols + 1)
+        val coltmp1 = new Array[Double](ma.numRows)
+        val coltmp2 = new Array[Double](mb.numRows)
+        for (jc <- 0 until ma.numCols) {
+            val numPerColb = colPtrb(jc + 1) - colPtrb(jc)
+            val numPerCola = colPtra(jc + 1) - colPtra(jc)
+            arrayClear(coltmp1)
+            arrayClear(coltmp2)
+            for (ia <- colPtra(jc) until colPtra(jc) + numPerCola) {
+                coltmp1(rowIdxa(ia)) += va(ia)
+            }
+            for (ib <- colPtrb(jc) until colPtrb(jc) + numPerColb) {
+                coltmp2(rowIdxb(ib)) += vb(ib)
+            }
+            for (ix <- 0 until coltmp1.length) {
+                if (op == 0) {
+                    coltmp1(ix) *= coltmp2(ix)
+                }
+                else {
+                    coltmp1(ix) /= coltmp2(ix)
+                }
+            }
+            var count = 0
+            for (i <- 0 until coltmp1.length) {
+                if (coltmp1(i) != 0.0) {
+                    rowIdxc += i
+                    vc += coltmp1(i)
+                    count += 1
+                }
+            }
+            colPtrc(jc + 1) = colPtrc(jc) + count
+        }
+        if (ma.numRows * ma.numCols > 2 * colPtrc(colPtrc.length - 1) + colPtrc.length) {
+            new SparseMatrix(ma.numRows, ma.numCols, colPtrc, rowIdxc.toArray, vc.toArray)
+        }
+        else {
+            new SparseMatrix(ma.numRows, ma.numCols, colPtrc, rowIdxc.toArray, vc.toArray).toDense
+        }
+    }
+
 }
 
 object TestSparse {
@@ -286,7 +425,15 @@ object TestSparse {
         val colPtrb = Array[Int](0,1,3,4)
         val spmat1 = new SparseMatrix(3,3,colPtra,rowIdxa,va)
         val spmat2 = new SparseMatrix(3,3,colPtrb,rowIdxb,vb)
-        println(LocalMatrix.multiplySparseSparse(spmat1.transpose, spmat2))
+        println(spmat1)
+        println("-" * 20)
+        println(spmat2)
+        println("-" * 20)
+        println(LocalMatrix.multiplySparseSparse(spmat1, spmat2))
+        println("-" * 20)
+        println(LocalMatrix.elementWiseMultiply(spmat1, spmat2))
+        println("-" * 20)
+        println(LocalMatrix.add(spmat1, spmat2))
         //println(LocalMatrix.addSparseSparseNative(spmat1, spmat2))
 
     }

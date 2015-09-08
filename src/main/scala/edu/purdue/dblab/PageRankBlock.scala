@@ -1,6 +1,7 @@
 package edu.purdue.dblab
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkContext, SparkConf}
 
 /**
@@ -28,14 +29,17 @@ object PageRankBlock {
       val sc = new SparkContext(conf)
       val coordinateRdd = genCoordinateRdd(sc, graphName)
       val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)
-      val matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
+      var matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
+      matrix.partitionByBlockCyclic()
       val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blkSize, blkSize), 8)
       var x = new BlockPartitionMatrix(vecRdd, blkSize, blkSize, matrix.nCols(), 1)
-      val v = x
+      var v = x
       val alpha = 0.85
+      matrix = (alpha *:matrix).cache()
+      v = (1.0 - alpha) *:v
       val t1 = System.currentTimeMillis()
       for (i <- 0 until niter) {
-        x =  alpha *: (matrix %*% x) + ((1.0 - alpha) *: v, (blkSize, blkSize))
+        x =  matrix %*% x + (v, (blkSize, blkSize))
         //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (blk_col_size, blk_col_size))
       }
       //x.blocks.count()

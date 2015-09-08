@@ -3,7 +3,6 @@ package edu.purdue.dblab
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.mllib.linalg.{Matrix => MLMatrix, SparseMatrix, DenseMatrix}
 
 import scala.collection.mutable
 import scala.collection.mutable.{Map => MMap, ArrayBuffer}
@@ -23,6 +22,8 @@ class BlockPartitionMatrix (
 
     val ROW_BLK_NUM = math.ceil(nRows() * 1.0 / ROWS_PER_BLK).toInt
     val COL_BLK_NUM = math.ceil(nCols() * 1.0 / COLS_PER_BLK).toInt
+
+    private var groupByCached: RDD[(Int, Iterable[(Int, MLMatrix)])] = null
 
     def this(
               blocks: RDD[((Int, Int), MLMatrix)],
@@ -89,6 +90,15 @@ class BlockPartitionMatrix (
         this
     }
 
+    def partitionBy(p: Partitioner): this.type = {
+        blocks.partitionBy(p)
+        this
+    }
+
+    def partitionByBlockCyclic(): this.type = {
+        blocks.partitionBy(genBlockPartitioner())
+        this
+    }
     /*
      * Persists the underlying RDD with specified storage level.
      */
@@ -364,9 +374,13 @@ class BlockPartitionMatrix (
         //val otherMatrix = new BlockPartitionMatrix(rddB, COLS_PER_BLK, COLS_PER_BLK, other.nRows(), other.nCols())
         val resPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, math.max(blocks.partitions.length, rddB.partitions.length))
 
-        val rdd1 = blocks.map{ case ((rowIdx, colIdx), matA) =>
-            (colIdx, (rowIdx, matA))
-        }.groupByKey()
+        //val resPartitioner = new RowPartitioner(8)
+        if (groupByCached == null) {
+            groupByCached = blocks.map{ case ((rowIdx, colIdx), matA) =>
+                (colIdx, (rowIdx, matA))
+            }.groupByKey().cache()
+        }
+        val rdd1 = groupByCached
         val rdd2 = rddB.map{ case ((rowIdx, colIdx), matB) =>
             (rowIdx, (colIdx, matB))
         }.groupByKey()

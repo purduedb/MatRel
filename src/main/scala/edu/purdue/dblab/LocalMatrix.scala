@@ -1,7 +1,6 @@
 package edu.purdue.dblab
 
 import org.apache.spark.SparkException
-import org.apache.spark.mllib.linalg.{Matrix => MLMatrix, SparseMatrix, DenseMatrix}
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
 
 import scala.collection.mutable.ArrayBuffer
@@ -207,6 +206,37 @@ object LocalMatrix {
         (rowIdx, colPtr, values)
     }
 
+    /*
+     * Convert a CSC format sparse matrix to a CSR format sparse matrix.
+     * Ouput the three vectors for CSR format, (rowPtr, colIdx, values)
+     */
+    def CSC2CSR(sp: SparseMatrix): (Array[Int], Array[Int], Array[Double]) = {
+        require(!sp.isTransposed, s"Sparse matrix needs to set false for isTransposed bit, but found " +
+          s"sp.isTransposed = ${sp.isTransposed}")
+        val vcsc = sp.values
+        val rowIdxcsc = sp.rowIndices
+        val colPtrcsc = sp.colPtrs
+        val values = new Array[Double](vcsc.length)
+        val colIdx = new Array[Int](vcsc.length)
+        val rowPtr = new Array[Int](sp.numRows + 1)
+        val rowMap = scala.collection.mutable.LinkedHashMap[Int, ArrayBuffer[Int]]()
+        for (i <- 0 until rowIdxcsc.length) {
+            val elem = rowMap.getOrElse(rowIdxcsc(i), new ArrayBuffer[Int]())
+            elem += i
+            rowMap(rowIdxcsc(i)) = elem
+        }
+        var idx = 0
+        for (r <- 0 until rowPtr.length - 1) {
+            rowPtr(r + 1) = rowPtr(r) + rowMap(r).length
+            for (id <- rowMap(r)) {
+                values(idx) = vcsc(id)
+                colIdx(idx) = binSearch(colPtrcsc, id)
+                idx += 1
+            }
+        }
+        (rowPtr, colIdx, values)
+    }
+
     private def binSearch(arr: Array[Int], target: Int): Int = {
         var (lo, hi) = (0, arr.length - 2)
         while (lo <= hi) {
@@ -221,7 +251,7 @@ object LocalMatrix {
                 lo = mid + 1
             }
         }
-        throw new SparkException("binary search failed for CSR2CSC conversion!")
+        throw new SparkException("binary search failed for CSR2CSC/CSC2CSR conversion!")
     }
 
     private def arrayClear(arr: Array[Double]): Unit = {
@@ -413,6 +443,247 @@ object LocalMatrix {
         }
     }
 
+    // C = C + A * B, and C is pre-allocated already
+    // this method should save memory when C is reused for later iterations
+    // cannot handle the case when C is a sparse matrix and holding a non-exsitent entry for the product
+    def incrementalMultiply(A: MLMatrix, B: MLMatrix, C: MLMatrix): MLMatrix = {
+        require(A.numRows == C.numCols && B.numCols == C.numCols, s"dimension mismatch " +
+        s"A.numRows = ${A.numRows}, C.numRows = ${C.numRows}, B.numCols = ${B.numCols}, C.numCols = ${C.numCols}")
+        (A, B, C) match {
+            case (matA: DenseMatrix, matB: DenseMatrix, matC: DenseMatrix) => incrementalMultiplyDenseDense(matA, matB, matC)
+            case (matA: DenseMatrix, matB: SparseMatrix, matC: DenseMatrix) => incrementalMultiplyDenseSparse(matA, matB, matC)
+            case (matA: SparseMatrix, matB: DenseMatrix, matC: DenseMatrix) => incrementalMultiplySparseDense(matA, matB, matC)
+            case (matA: SparseMatrix, matB: SparseMatrix, matC: DenseMatrix) => incrementalMultiplySparseSparseDense(matA, matB, matC)
+            //case (matA: SparseMatrix, matB: SparseMatrix, matC: SparseMatrix) =>
+            case _ => new SparkException(s"incrememtalMultiply does not apply to the required format of matrices, " +
+            s"A: ${A.getClass}, B: ${B.getClass}, C: ${C.getClass}")
+        }
+        C
+    }
+
+    private def incrementalMultiplyDenseDense(A: DenseMatrix, B: DenseMatrix, C: DenseMatrix) = {
+        for (i <- 0 until A.numRows) {
+            for (j <- 0 until B.numCols) {
+                for (k <- 0 until A.numCols) {
+                    var v1 = 0.0
+                    if (A.isTransposed) v1 = A(k, i)
+                    else v1 = A(i, k)
+                    var v2 = 0.0
+                    if (B.isTransposed) v2 = B(j, k)
+                    else v2 = B(k, j)
+                    if (!C.isTransposed) {
+                        C(i, j) += v1 * v2
+                    }
+                    else {
+                        C(j, i) += v1 * v2
+                    }
+                }
+            }
+        }
+    }
+
+    private def incrementalMultiplyDenseSparse(A: DenseMatrix, B: SparseMatrix, C: DenseMatrix) = {
+        var values: Array[Double] = B.values
+        var rowIdx: Array[Int] = B.rowIndices
+        var colPtr: Array[Int] = B.colPtrs
+        if (B.isTransposed) {
+            val res = CSR2SCS(B)
+            rowIdx = res._1
+            colPtr = res._2
+            values = res._3
+        }
+        // multiply a matrix from right-hand-side is equvilent to perform column transformantion
+        // on the first matrix
+        for (c <- 0 until B.numCols) {
+            val count = colPtr(c+1) - colPtr(c)
+            val cstart = colPtr(c)
+            for (ridx <- cstart until cstart + count) {
+                val v = values(ridx)
+                val r = rowIdx(ridx)
+                // r-th column of A multiply with v and add those values to c-th column in C
+                for (i <- 0 until A.numRows) {
+                    var va = 0.0
+                    if (A.isTransposed) va = A(r, i)
+                    else va = A(i, r)
+                    if (!C.isTransposed) {
+                        C(i, c) += va * v
+                    }
+                    else {
+                        C(c, i) += va * v
+                    }
+                }
+            }
+        }
+    }
+
+    private def incrementalMultiplySparseDense(A: SparseMatrix, B: DenseMatrix, C: DenseMatrix) = {
+        var values: Array[Double] = A.values
+        var colIdx: Array[Int] = A.rowIndices
+        var rowPtr: Array[Int] = A.colPtrs
+        if (!A.isTransposed) {
+            val res = CSC2CSR(A)
+            rowPtr = res._1
+            colIdx = res._2
+            values = res._3
+        }
+        // multiply a sparse matrix from left-hand-side is equivalent to perform row transformation
+        // on the second matrix
+        for (r <- 0 until A.numRows) {
+            val count = rowPtr(r+1) - rowPtr(r)
+            val rstart = rowPtr(r)
+            for (cidx <- rstart until rstart + count) {
+                val v = values(cidx)
+                val c = colIdx(cidx)
+                // c-th row of B mutliply with v and add those tho the r-th row in C
+                for (j <- 0 until B.numCols) {
+                    var vb = 0.0
+                    if (B.isTransposed) vb = B(j, c)
+                    else vb = B(c, j)
+                    if (!C.isTransposed) {
+                        C(r, j) += v * vb
+                    }
+                    else {
+                        C(j, r) += v * vb
+                    }
+                }
+            }
+        }
+    }
+
+    private def incrementalMultiplySparseSparseDense(A: SparseMatrix, B: SparseMatrix, C: DenseMatrix) = {
+        if (!A.isTransposed && !B.isTransposed) { // both A and B are not transposed
+            // process as column transformation on A
+            val valuesb = B.values
+            val rowIdxb = B.rowIndices
+            val colPtrb = B.colPtrs
+            val valuesa = A.values
+            val rowIdxa = A.rowIndices
+            val colPtra = A.colPtrs
+            for (cb <- 0 until B.numCols) {
+                val countb = colPtrb(cb+1) - colPtrb(cb)
+                val startb = colPtrb(cb)
+                for (ridxb <- startb until startb + countb) {
+                    val vb = valuesb(ridxb)
+                    val rowb = rowIdxb(ridxb)
+                    // get rowb-th column from A and multiply it with vb
+                    val counta = colPtra(rowb+1) - colPtra(rowb)
+                    val starta = colPtra(rowb)
+                    for (ridxa <- starta until starta + counta) {
+                        val va = valuesa(ridxa)
+                        val rowa = rowIdxa(ridxa)
+                        if (!C.isTransposed) {
+                            C(rowa, cb) += va * vb
+                        }
+                        else {
+                            C(cb, rowa) += va * vb
+                        }
+                    }
+                }
+            }
+        }
+        else if (A.isTransposed && B.isTransposed) { // both A and B are transposed
+            // process as row transformation on B
+            val valuesa = A.values
+            val colIdxa = A.rowIndices
+            val rowPtra = A.colPtrs
+            val valuesb = B.values
+            val colIdxb = B.rowIndices
+            val rowPtrb = B.colPtrs
+            for (ra <- 0 until A.numRows) {
+                val counta = rowPtra(ra+1) - rowPtra(ra)
+                val starta = rowPtra(ra)
+                for (cidxa <- starta until starta + counta) {
+                    val va = valuesa(cidxa)
+                    val cola = colIdxa(cidxa)
+                    // get cola-th row from B and multiply it with va
+                    val countb = rowPtrb(cola+1) - rowPtrb(cola)
+                    val startb = rowPtrb(cola)
+                    for (cidxb <- startb until startb + countb) {
+                        val vb = valuesb(cidxb)
+                        val colb = colIdxb(cidxb)
+                        if (!C.isTransposed) {
+                            C(ra, colb) += va * vb
+                        }
+                        else {
+                            C(colb, ra) += va * vb
+                        }
+                    }
+                }
+            }
+        }
+        else if (A.isTransposed && !B.isTransposed) { // A is stored in row format and B is stored in column format
+            // this is an easy (natrual) case
+            val valuesa = A.values
+            val colIdxa = A.rowIndices
+            val rowPtra = A.colPtrs
+            val valuesb = B.values
+            val rowIdxb = B.rowIndices
+            val colPtrb = B.colPtrs
+            for (ra <- 0 until A.numRows) {
+                val counta = rowPtra(ra+1) - rowPtra(ra)
+                val starta = rowPtra(ra)
+                val entrya: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
+                for (cidxa <- starta until starta + counta) {
+                    entrya.append((colIdxa(cidxa), valuesa(cidxa)))
+                }
+                for (cb <- 0 until B.numCols) {
+                    val countb = colPtrb(cb+1) - colPtrb(cb)
+                    val startb = colPtrb(cb)
+                    val entryb: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
+                    for (ridxb <- startb until startb + countb) {
+                        entryb.append((rowIdxb(ridxb), valuesb(ridxb)))
+                    }
+                    // check if any entries are matched in entrya and entryb
+                    var (i, j) = (0, 0)
+                    while (i < entrya.length && j < entryb.length) {
+                        if (entrya(i)._1 == entryb(j)._1) {
+                            if (!C.isTransposed) {
+                                C(ra, cb) += entrya(i)._2 * entryb(j)._2
+                            }
+                            else {
+                                C(cb, ra) += entrya(i)._2 * entryb(j)._2
+                            }
+                            i += 1
+                            j += 1
+                        }
+                        else if (entrya(i)._1 > entryb(j)._1) j += 1
+                        else i += 1
+                    }
+                }
+            }
+        }
+        else {  // A is stored in column format and B is stored in row format
+            // this can be viewed as outer-product of the k-th column from A with the k-th row from B
+            val valuesa = A.values
+            val rowIdxa = A.rowIndices
+            val colPtra = A.colPtrs
+            val valuesb = B.values
+            val colIdxb = B.rowIndices
+            val rowPtrb = B.colPtrs
+            for (idx <- 0 until A.numCols) {
+                val counta = colPtra(idx+1) - colPtra(idx)
+                val starta = colPtra(idx)
+                val entrya: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
+                for (ridx <- starta until starta + counta) {
+                    entrya.append((rowIdxa(ridx), valuesa(ridx)))
+                }
+                val countb = rowPtrb(idx+1) - rowPtrb(idx)
+                val startb = rowPtrb(idx)
+                val entryb: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
+                for (cidx <- startb until startb + countb) {
+                    entryb.append((colIdxb(cidx), valuesb(cidx)))
+                }
+                for (t1 <- entrya)
+                    for (t2 <- entryb)
+                        if (!C.isTransposed) {
+                            C(t1._1, t2._1) += t1._2 * t2._2
+                        }
+                        else {
+                            C(t2._1, t1._1) += t1._2 * t2._2
+                        }
+            }
+        }
+    }
 }
 
 object TestSparse {
@@ -434,7 +705,14 @@ object TestSparse {
         println(LocalMatrix.elementWiseMultiply(spmat1, spmat2))
         println("-" * 20)
         println(LocalMatrix.add(spmat1, spmat2))
+        println("-" * 20)
         //println(LocalMatrix.addSparseSparseNative(spmat1, spmat2))
-
+        val vd1 = Array[Double](1,4,7,2,5,8,3,6,9)
+        val vd2 = Array[Double](1,2,3,1,2,3,1,2,3)
+        val den1 = new DenseMatrix(3,3,vd1)
+        val den2 = new DenseMatrix(3,3,vd2)
+        val denC = DenseMatrix.zeros(3,3)
+        LocalMatrix.incrementalMultiply(spmat2, spmat2.transpose, denC)
+        println(denC)
     }
 }

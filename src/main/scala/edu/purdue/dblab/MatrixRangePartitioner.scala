@@ -149,6 +149,44 @@ class BlockCyclicPartitioner(
     }
 }
 
+class RowPartitioner(partitions: Int) extends Partitioner {
+    require(partitions >= 0, s"Number of partitions cannot be negative but found $partitions")
+
+    def numPartitions = partitions
+
+    def getPartition(key: Any): Int = {
+        key match {
+            case (i: Int, j: Int) => i % partitions
+            case (i: Int, j: Int, _: Int) => i % partitions
+            case _ => throw new IllegalArgumentException(s"Unrecognized key: $key")
+        }
+    }
+
+    override def equals(other: Any): Boolean = {
+        other.isInstanceOf[RowPartitioner] &&
+          numPartitions == other.asInstanceOf[RowPartitioner].numPartitions
+    }
+}
+
+class ColumnPartitioner(partitions: Int) extends Partitioner {
+    require(partitions >= 0, s"Number of partitions cannot be negative but found $partitions")
+
+    def numPartitions = partitions
+
+    def getPartition(key: Any): Int = {
+        key match {
+            case (i: Int, j: Int) => j % partitions
+            case (i: Int, j: Int, _: Int) => j % partitions
+            case _ => throw new IllegalArgumentException(s"Unrecognized key: $key")
+        }
+    }
+
+    override def equals(other: Any): Boolean = {
+        other.isInstanceOf[ColumnPartitioner] &&
+          numPartitions == other.asInstanceOf[ColumnPartitioner].numPartitions
+    }
+}
+
 /*
  *  provides some factory methods for creating BlockCyclicPartitioner instances.
  */

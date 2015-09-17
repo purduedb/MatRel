@@ -121,8 +121,8 @@ class BlockCyclicPartitioner(
     private val num_row_part = ROW_BLKS / row_partition_num
     private val num_col_part = COL_BLKS / col_partition_num
 
-    println(s"num_row_part = $num_row_part")
-    println(s"num_col_part = $num_col_part")
+    //println(s"num_row_part = $num_row_part")
+    //println(s"num_col_part = $num_col_part")
 
     override val numPartitions: Int = row_partition_num * col_partition_num
 

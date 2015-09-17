@@ -230,7 +230,4 @@ object BlockCyclicPartitioner {
         new BlockCyclicPartitioner(ROW_BLKS, COL_BLKS, ROW_BLKS_PER_PARTITION, COL_BLKS_PER_PARTITION)
     }
 
-    def main (args: Array[String]) {
-        BlockCyclicPartitioner(23,23,8)
-    }
 }

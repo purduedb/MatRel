@@ -37,6 +37,7 @@ object PageRankBlockHDFS {
     var v = x
     val alpha = 0.85
     matrix = (alpha *:matrix).cache()
+    matrix.stat()
     v = (1.0 - alpha) *:v
     val t1 = System.currentTimeMillis()
     for (i <- 0 until niter) {

@@ -268,12 +268,12 @@ object LocalMatrix {
     }
 
     private def multiplyScalarDense(alpha: Double, ma: DenseMatrix): MLMatrix = {
-        val arr = for (elem <- ma.toArray) yield elem * alpha
+        val arr = for (elem <- ma.values) yield alpha * elem
         new DenseMatrix(ma.numRows, ma.numCols, arr)
     }
 
     private def multiplyScalarSparse(alpha: Double, ma: SparseMatrix): MLMatrix = {
-        val arr = for (elem <- ma.values) yield  elem * alpha
+        val arr = for (elem <- ma.values) yield alpha * elem
         new SparseMatrix(ma.numRows, ma.numCols, ma.colPtrs, ma.rowIndices, arr)
     }
 

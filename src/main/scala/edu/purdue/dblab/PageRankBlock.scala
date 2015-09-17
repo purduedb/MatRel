@@ -34,6 +34,7 @@ object PageRankBlock {
       val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blkSize, blkSize), 8)
       var x = new BlockPartitionMatrix(vecRdd, blkSize, blkSize, matrix.nCols(), 1)
       var v = x
+      v.partitionByBlockCyclic()
       val alpha = 0.85
       matrix = (alpha *:matrix).cache()
       matrix.stat()

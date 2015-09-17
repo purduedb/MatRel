@@ -24,7 +24,7 @@ class BlockPartitionMatrix (
 
     private var groupByCached: RDD[(Int, Iterable[(Int, MLMatrix)])] = null
 
-    private val numWorkers = blocks.context.getExecutorStorageStatus.length - 1
+    private val numWorkers = 8
 
 
     override def nRows(): Long = {
@@ -386,9 +386,9 @@ class BlockPartitionMatrix (
         // other.ROWS_PER_BLK = COLS_PER_BLK and square blk for other
         val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
         //val otherMatrix = new BlockPartitionMatrix(rddB, COLS_PER_BLK, COLS_PER_BLK, other.nRows(), other.nCols())
-        val resPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, numWorkers)
+        //val resPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, numWorkers)
 
-        //val resPartitioner = new RowPartitioner(8)
+        val resPartitioner = new RowPartitioner(8)
         if (groupByCached == null) {
             groupByCached = blocks.map{ case ((rowIdx, colIdx), matA) =>
                 (colIdx, (rowIdx, matA))

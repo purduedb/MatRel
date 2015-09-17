@@ -36,6 +36,7 @@ object PageRankBlock {
       var v = x
       val alpha = 0.85
       matrix = (alpha *:matrix).cache()
+      matrix.stat()
       v = (1.0 - alpha) *:v
       val t1 = System.currentTimeMillis()
       for (i <- 0 until niter) {
@@ -59,7 +60,8 @@ object PageRankBlock {
       println("t2 - t1 = " + (t2-t1)/1000.0 + "sec")
       t2 = System.currentTimeMillis()
       println("t2 - t1 = " + (t2-t1)/1000.0 + "sec")
-      sc.stop()
+      //sc.stop()
+      Thread.sleep(10000)
     }
 
   def genCoordinateRdd(sc: SparkContext, graphName: String): RDD[Entry] = {

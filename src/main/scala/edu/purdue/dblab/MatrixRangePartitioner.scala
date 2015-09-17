@@ -118,12 +118,18 @@ class BlockCyclicPartitioner(
     private val row_partition_num = math.ceil(ROW_BLKS * 1.0 / ROW_BLKS_PER_PARTITION).toInt
     private val col_partition_num = math.ceil(COL_BLKS * 1.0 / COL_BLKS_PER_PARTITION).toInt
 
+    private val num_row_part = ROW_BLKS / row_partition_num
+    private val num_col_part = COL_BLKS / col_partition_num
+
+    println(s"num_row_part = $num_row_part")
+    println(s"num_col_part = $num_col_part")
+
     override val numPartitions: Int = row_partition_num * col_partition_num
 
     override def getPartition(key: Any): Int = {
         key match {
-            case (i: Int, j : Int) => ((i % row_partition_num) + (j % col_partition_num)) % numPartitions
-            case (i: Int, j: Int, _: Int) => ((i % row_partition_num) + (j % col_partition_num)) % numPartitions
+            case (i: Int, j : Int) => ((i % num_row_part) * col_partition_num + (j % num_col_part)) % numPartitions
+            case (i: Int, j: Int, _: Int) => ((i % num_row_part) * col_partition_num + (j % num_col_part)) % numPartitions
             case _ => throw new IllegalArgumentException(s"Unrecognized key: $key")
         }
     }
@@ -187,6 +193,24 @@ class ColumnPartitioner(partitions: Int) extends Partitioner {
     }
 }
 
+class IndexPartitioner(partitions: Int) extends Partitioner {
+    require(partitions >= 0, s"Number of partitions cannot be negative but found $partitions")
+
+    def numPartitions = partitions
+
+    def getPartition(key: Any): Int = {
+        key match {
+            case (i: Int) => i
+            case _ => throw new IllegalArgumentException(s"Unrecognized key: $key")
+        }
+    }
+
+    override def equals(other: Any): Boolean = {
+        other.isInstanceOf[IndexPartitioner] &&
+          numPartitions == other.asInstanceOf[IndexPartitioner].numPartitions
+    }
+}
+
 /*
  *  provides some factory methods for creating BlockCyclicPartitioner instances.
  */
@@ -204,5 +228,9 @@ object BlockCyclicPartitioner {
         val ROW_BLKS_PER_PARTITION = math.round(math.max(scale * ROW_BLKS, 1.0)).toInt
         val COL_BLKS_PER_PARTITION = math.round(math.max(scale * COL_BLKS, 1.0)).toInt
         new BlockCyclicPartitioner(ROW_BLKS, COL_BLKS, ROW_BLKS_PER_PARTITION, COL_BLKS_PER_PARTITION)
+    }
+
+    def main (args: Array[String]) {
+        BlockCyclicPartitioner(23,23,8)
     }
 }

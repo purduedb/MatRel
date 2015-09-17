@@ -684,6 +684,39 @@ object LocalMatrix {
             }
         }
     }
+
+    def multiplySparseMatDenseVec(sp: SparseMatrix, dv: DenseMatrix): DenseMatrix = {
+        require(dv.numCols == 1, s"vector with more than 1 columns, dv.numCols = ${dv.numCols}")
+        require(sp.numCols == dv.numRows, s"Sparse Mat-Vect dimensions do not match, " +
+        s"Mat.numCols = ${sp.numCols}, Vec.numRows = ${dv.numRows}")
+        val arr = new Array[Double](sp.numRows)
+        if (sp.isTransposed) { // ideal condition that sp is in CSR format
+            val values = sp.values
+            val colIdx = sp.rowIndices
+            val rowPtr = sp.colPtrs
+            for (ridx <- 0 until arr.length) {
+                val count = rowPtr(ridx + 1) - rowPtr(ridx)
+                val start = rowPtr(ridx)
+                for (cidx <- start until start + count) {
+                    arr(ridx) += values(cidx) * dv(colIdx(cidx), 0)
+                }
+            }
+            new DenseMatrix(sp.numRows, 1, arr)
+        }
+        else { // sp is in CSC format
+            val values = sp.values
+            val rowIdx = sp.rowIndices
+            val colPtr = sp.colPtrs
+            for (cidx <- 0 until sp.numCols) {
+                val count = colPtr(cidx + 1) - colPtr(cidx)
+                val start = colPtr(cidx)
+                for (ridx <- start until start + count) {
+                    arr(rowIdx(ridx)) += values(ridx) * dv(cidx, 0)
+                }
+            }
+            new DenseMatrix(sp.numRows, 1, arr)
+        }
+    }
 }
 
 object TestSparse {
@@ -712,7 +745,10 @@ object TestSparse {
         val den1 = new DenseMatrix(3,3,vd1)
         val den2 = new DenseMatrix(3,3,vd2)
         val denC = DenseMatrix.zeros(3,3)
+        val denV = new DenseMatrix(3, 1, Array[Double](1,2,3))
         LocalMatrix.incrementalMultiply(spmat2, spmat2.transpose, denC)
         println(denC)
+        println("-" * 20)
+        println(LocalMatrix.multiplySparseMatDenseVec(spmat1, denV))
     }
 }

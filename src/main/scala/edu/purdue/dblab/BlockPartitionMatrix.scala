@@ -556,7 +556,9 @@ class BlockPartitionMatrix (
         val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
         val resultPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, numPartitions)
 
-        val prodRDD = blocks.mapPartitionsWithIndex(flatten, preservesPartitioning = false)
+        val partRDD = blocks.mapPartitionsWithIndex(flatten, preservesPartitioning = false)
+        //println("mapPartitionsWithIndex: " + partRDD.count())
+        val prodRDD = partRDD
           .join(otherDup)
           .flatMap { case (pidx, (iter1, iter2)) =>
             // aggregate local block matrices on each partition
@@ -580,7 +582,7 @@ class BlockPartitionMatrix (
             }
             idxToMat.entrySet().iterator()
         }.map(x => (x.getKey, x.getValue))
-        .reduceByKey(resultPartitioner, LocalMatrix.add(_, _))
+         .reduceByKey(resultPartitioner, LocalMatrix.add(_, _))
         new BlockPartitionMatrix(prodRDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }
 

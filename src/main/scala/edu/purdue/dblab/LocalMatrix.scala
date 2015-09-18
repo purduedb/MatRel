@@ -717,6 +717,33 @@ object LocalMatrix {
             new DenseMatrix(sp.numRows, 1, arr)
         }
     }
+
+    def matrixMultiplication(mat1: MLMatrix, mat2: MLMatrix): MLMatrix = {
+        (mat1, mat2) match {
+            case (dm1: DenseMatrix, dm2: DenseMatrix) => dm1.multiply(dm2)
+            case (dm: DenseMatrix, sp: SparseMatrix) => dm.multiply(sp.toDense)
+            case (sp: SparseMatrix, dm: DenseMatrix) =>
+                if (dm.numCols == 1) { // add support for sparse matrix multiply with dense vector
+                    LocalMatrix.multiplySparseMatDenseVec(sp, dm)
+                }
+                else {
+                    sp.multiply(dm)
+                }
+            case (sp1: SparseMatrix, sp2: SparseMatrix) =>
+                val sparsity1 = sp1.values.length * 1.0 / (sp1.numRows * sp1.numCols)
+                val sparsity2 = sp2.values.length * 1.0 / (sp2.numRows * sp2.numCols)
+                if (sparsity1 > 0.1) {
+                    sp1.toDense.multiply(sp2.toDense)
+                }
+                else if (sparsity2 > 0.1) {
+                    sp1.multiply(sp2.toDense)
+                }
+                else {
+                    LocalMatrix.multiplySparseSparse(sp1, sp2)
+                }
+            case _ => throw new SparkException(s"Unsupported matrix type ${mat1.getClass.getName}")
+        }
+    }
 }
 
 object TestSparse {

@@ -3,6 +3,8 @@ package edu.purdue.dblab
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
+import java.util.concurrent.ConcurrentHashMap
+import scala.collection.JavaConversions.asScalaIterator
 
 import scala.collection.mutable
 import scala.collection.mutable.{Map => MMap, ArrayBuffer}
@@ -546,7 +548,7 @@ class BlockPartitionMatrix (
             //useOtherMatrix = true
         }
 
-        val otherDup = duplicateCrossPartitions(rddB, numPartitions)
+        val otherDup = duplicateCrossPartitions(rddB, blocks.partitions.length)
 
         def flatten(idx: Int, iter: Iterator[MatrixBlk]) = {
             Iterator((idx, iter))
@@ -554,31 +556,31 @@ class BlockPartitionMatrix (
         val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
         val resultPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, numPartitions)
 
-        val prodRDD = blocks.mapPartitionsWithIndex(flatten, preservesPartitioning = true)
+        val prodRDD = blocks.mapPartitionsWithIndex(flatten, preservesPartitioning = false)
           .join(otherDup)
           .flatMap { case (pidx, (iter1, iter2)) =>
             // aggregate local block matrices on each partition
-            val idxToMat = new mutable.HashMap[(Int, Int), MLMatrix]()
+            val idxToMat = new ConcurrentHashMap[(Int, Int), MLMatrix]()
             val iter2Dup = iter2.toSeq
             for (blk1 <- iter1) {
                 for (blk2 <- iter2Dup) {
                     if (blk1._1._2 == blk2._1._1) {
                         val key = (blk1._1._1, blk2._1._2)
-                        if (!idxToMat.contains(key)) {
+                        if (!idxToMat.containsKey(key)) {
                             val prod = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
-                            idxToMat.put(key, prod)
-
+                            idxToMat.putIfAbsent(key, prod)
                         }
                         else {
                             val prod1 = idxToMat.get(key)
-                            val prod2 = LocalMatrix.add(prod1.get, LocalMatrix.matrixMultiplication(blk1._2, blk2._2))
-                            idxToMat.put(key, prod2)
+                            val prod2 = LocalMatrix.add(prod1, LocalMatrix.matrixMultiplication(blk1._2, blk2._2))
+                            idxToMat.replace(key, prod2)
                         }
                     }
                 }
             }
-            idxToMat.iterator
-        }.reduceByKey(resultPartitioner, LocalMatrix.add(_, _))
+            idxToMat.entrySet().iterator()
+        }.map(x => (x.getKey, x.getValue))
+        .reduceByKey(resultPartitioner, LocalMatrix.add(_, _))
         new BlockPartitionMatrix(prodRDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }
 
@@ -726,14 +728,16 @@ object TestBlockPartition {
         /*val mat = List[(Long, Long)]((0, 0), (0,1), (0,2), (0,3), (0, 4), (0, 5), (1, 0), (1, 2),
             (2, 3), (2, 4), (3,1), (3,2), (3, 4), (4, 5), (5, 4))
         val CooRdd = sc.parallelize(mat, 2).map(x => Entry(x._1, x._2, 1.0))
-        val matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(CooRdd, 3, 3).cache()
+        var matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(CooRdd, 3, 3).cache()
         val vec = BlockPartitionMatrix.onesMatrixList(6, 1, 3, 3)//List[((Int, Int), MLMatrix)](((0, 0), DenseMatrix.ones(3, 1)), ((1, 0), DenseMatrix.ones(3, 1)))
         val vecRdd = sc.parallelize(vec, 2)
         var x = new BlockPartitionMatrix(vecRdd, 3, 3, 6, 1).multiplyScalar(1.0 / 6)
-        val v = new BlockPartitionMatrix(vecRdd, 3, 3, 6, 1).multiplyScalar(1.0 / 6)
+        var v = new BlockPartitionMatrix(vecRdd, 3, 3, 6, 1).multiplyScalar(1.0 / 6)
         val alpha = 0.85
+        matrix = (alpha *: matrix).partitionByBlockCyclic().cache()
+        v = (1.0 - alpha) *: v
         for (i <- 0 until 10) {
-            x = alpha *: (matrix %*% x) + ((1.0-alpha) *: v, (3,3))
+            x = (matrix %*% x) + (v, (3,3))
             //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (3,3))
         }
         println(x.toLocalMatrix())*/

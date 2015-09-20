@@ -190,7 +190,7 @@ class BlockPartitionMatrix (
     }
 
     def multiplyScalar(alpha: Double): BlockPartitionMatrix = {
-        println(blocks.partitions.length + " partitions in blocks RDD" +
+        /*println(blocks.partitions.length + " partitions in blocks RDD" +
           s" with ${nRows()} rows ${nCols()} cols")
         blocks.mapPartitionsWithIndex{ case (id, iter) =>
             var count = 0
@@ -202,7 +202,7 @@ class BlockPartitionMatrix (
                 }
             }
             Iterator((id, count))
-        }.collect().foreach(println)
+        }.collect().foreach(println)*/
 
         val rdd = blocks.mapValues(mat => LocalMatrix.multiplyScalar(alpha, mat))
         new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
@@ -550,13 +550,12 @@ class BlockPartitionMatrix (
 
         val otherDup = duplicateCrossPartitions(rddB, blocks.partitions.length)
 
-        def flatten(idx: Int, iter: Iterator[MatrixBlk]) = {
-            Iterator((idx, iter))
-        }
         val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
         val resultPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, numPartitions)
 
-        val partRDD = blocks.mapPartitionsWithIndex(flatten, preservesPartitioning = false)
+        val partRDD = blocks.mapPartitionsWithIndex { (idx, iter) =>
+            Iterator((idx, iter.toIndexedSeq.iterator))
+        }
         //println("mapPartitionsWithIndex: " + partRDD.count())
         val prodRDD = partRDD
           .join(otherDup)

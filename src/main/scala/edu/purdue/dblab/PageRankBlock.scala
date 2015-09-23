@@ -29,16 +29,18 @@ object PageRankBlock {
       val sc = new SparkContext(conf)
       val coordinateRdd = genCoordinateRdd(sc, graphName)
       val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)
-      var matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
+      val matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
       matrix.partitionByBlockCyclic()
       val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blkSize, blkSize), 8)
       var x = new BlockPartitionMatrix(vecRdd, blkSize, blkSize, matrix.nCols(), 1)
-      var v = x
+      val v = x
       v.partitionByBlockCyclic()
       val alpha = 0.85
-      matrix = (alpha *:matrix).cache()
+      //matrix = (alpha *:matrix).cache()
+      matrix.multiplyScalarInPlace(alpha).cache()
       matrix.stat()
-      v = (1.0 - alpha) *:v
+      //v = (1.0 - alpha) *:v
+      v.multiplyScalarInPlace(1.0 - alpha)
       val t1 = System.currentTimeMillis()
       for (i <- 0 until niter) {
         x =  matrix %*% x + (v, (blkSize, blkSize))

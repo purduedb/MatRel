@@ -43,7 +43,7 @@ object PageRankRowCol {
     val t1 = System.currentTimeMillis()
     for (i <- 0 until niter) {
       //x = matrix.rowMultiplyDup(x) + (v, (blkSize, blkSize))
-      x =  matrix %*% x + (v, (blkSize, blkSize))
+      x =  matrix %*% x + (v, (blkSize, blkSize), v.partitioner)
       //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (blk_col_size, blk_col_size))
     }
     //x.blocks.count()

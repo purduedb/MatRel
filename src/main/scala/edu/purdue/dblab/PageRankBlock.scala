@@ -43,7 +43,7 @@ object PageRankBlock {
       v.multiplyScalarInPlace(1.0 - alpha)
       val t1 = System.currentTimeMillis()
       for (i <- 0 until niter) {
-        x =  matrix %*% x + (v, (blkSize, blkSize))
+        x =  matrix %*% x + (v, (blkSize, blkSize), v.partitioner)
         //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (blk_col_size, blk_col_size))
       }
       //x.blocks.count()

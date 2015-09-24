@@ -64,6 +64,8 @@ class BlockPartitionMatrix (
         println("-" * 40 )
     }
 
+    def partitioner = blocks.partitioner.get
+
     private type MatrixBlk = ((Int, Int), MLMatrix)
     private type PartitionScheme = (Int, Int)
 
@@ -259,8 +261,10 @@ class BlockPartitionMatrix (
         this
     }
 
-    def +(other: BlockPartitionMatrix, dimension: PartitionScheme = (ROWS_PER_BLK, COLS_PER_BLK)): BlockPartitionMatrix = {
-        add(other, dimension)
+    def +(other: BlockPartitionMatrix,
+          dimension: PartitionScheme = (ROWS_PER_BLK, COLS_PER_BLK),
+          partitioner: Partitioner): BlockPartitionMatrix = {
+        add(other, dimension, partitioner)
     }
 
     /*
@@ -268,7 +272,9 @@ class BlockPartitionMatrix (
      * different partitioning schemes, i.e., different `ROWS_PER_BLK` and `COLS_PER_BLK` values.
      * @param dimension, specifies the (ROWS_PER_PARTITION, COLS_PER_PARTITION) of the result
      */
-    def add(other: BlockPartitionMatrix, dimension: PartitionScheme = (ROWS_PER_BLK, COLS_PER_BLK)): BlockPartitionMatrix = {
+    def add(other: BlockPartitionMatrix,
+            dimension: PartitionScheme = (ROWS_PER_BLK, COLS_PER_BLK),
+            partitioner: Partitioner): BlockPartitionMatrix = {
         val t1 = System.currentTimeMillis()
         require(nRows() == other.nRows(), s"Two matrices must have the same number of rows. " +
         s"A.rows: ${nRows()}, B.rows: ${other.nRows()}")
@@ -290,7 +296,8 @@ class BlockPartitionMatrix (
             }
             var (rddA, rddB) = (blocks, other.blocks)
             if (repartA) {
-                rddA = getNewBlocks(blocks, ROWS_PER_BLK, COLS_PER_BLK, dimension._1, dimension._2)
+                rddA = getNewBlocks(blocks, ROWS_PER_BLK, COLS_PER_BLK,
+                    dimension._1, dimension._2, partitioner)
                 /*rddA.foreach{
                     x =>
                         val (row, col) = x._1
@@ -300,7 +307,8 @@ class BlockPartitionMatrix (
                 }*/
             }
             if (repartB) {
-                rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK, dimension._1, dimension._2)
+                rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
+                    dimension._1, dimension._2, partitioner)
                 /*rddB.foreach{
                     x =>
                         val (row, col) = x._1
@@ -316,11 +324,10 @@ class BlockPartitionMatrix (
         }
     }
 
+    // rddA and rddB already partitioned in the same way
     private def addSameDim(rddA: RDD[MatrixBlk], rddB: RDD[MatrixBlk],
                             RPB: Int, CPB: Int): BlockPartitionMatrix = {
-        val rdd1 = rddA.partitionBy(genBlockPartitioner())
-        val rdd2 = rddB.partitionBy(genBlockPartitioner())
-        val rdd = rdd1.zipPartitions(rdd2, preservesPartitioning = true) { (iter1, iter2) =>
+        val rdd = rddA.zipPartitions(rddB, preservesPartitioning = true) { (iter1, iter2) =>
             val buf = new TrieMap[(Int, Int), MLMatrix]()
             for (a <- iter1) {
                 if (a != null) {
@@ -366,7 +373,9 @@ class BlockPartitionMatrix (
     }
 
     private def getNewBlocks(rdd: RDD[MatrixBlk],
-                             curRPB: Int, curCPB: Int, targetRPB: Int, targetCPB: Int): RDD[MatrixBlk] = {
+                             curRPB: Int, curCPB: Int,
+                             targetRPB: Int, targetCPB: Int,
+                             partitioner: Partitioner): RDD[MatrixBlk] = {
         val rddNew = rePartition(rdd, curRPB, curCPB, targetRPB, targetCPB)
         rddNew.groupByKey(genBlockPartitioner()).map {
             case ((rowIdx, colIdx), iter) =>
@@ -395,7 +404,7 @@ class BlockPartitionMatrix (
                     ((rowIdx, colIdx), new DenseMatrix(m, n, values).toSparse)
                 }
 
-        }
+        }.partitionBy(partitioner)
 
     }
     // RPB -- #rows_per_blk, CPB -- #cols_per_blk
@@ -423,7 +432,8 @@ class BlockPartitionMatrix (
                 for (j <- colRange; i <- rowRange) {
                     values += mat((i - rowOffset).toInt, (j - colOffset).toInt)
                 }
-                val elem = (rowRange(0), rowRange(rowRange.length - 1), colRange(0), colRange(colRange.length - 1), values.toArray)
+                val elem = (rowRange(0), rowRange(rowRange.length - 1),
+                  colRange(0), colRange(colRange.length - 1), values.toArray)
                 val entry = ((r, c), elem)
                 res += entry
             }
@@ -464,8 +474,10 @@ class BlockPartitionMatrix (
         var rddB = other.blocks
         //var useOtherMatrix: Boolean = false
         if (COLS_PER_BLK != other.ROWS_PER_BLK) {
-            logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
-            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK, COLS_PER_BLK, COLS_PER_BLK)
+            logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK " +
+              s"and B.row_per_blk = ${other.ROWS_PER_BLK}")
+            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
+                COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
             //useOtherMatrix = true
         }
         // other.ROWS_PER_BLK = COLS_PER_BLK and square blk for other
@@ -514,7 +526,8 @@ class BlockPartitionMatrix (
         //var useOtherMatrix: Boolean = false
         if (COLS_PER_BLK != other.ROWS_PER_BLK) {
             logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
-            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK, COLS_PER_BLK, COLS_PER_BLK)
+            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
+                COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
             //useOtherMatrix = true
         }
         // other.ROWS_PER_BLK = COLS_PER_BLK and square blk for other
@@ -626,7 +639,8 @@ class BlockPartitionMatrix (
         //var useOtherMatrix: Boolean = false
         if (COLS_PER_BLK != other.ROWS_PER_BLK) {
             logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
-            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK, COLS_PER_BLK, COLS_PER_BLK)
+            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
+                COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
             //useOtherMatrix = true
         }
 

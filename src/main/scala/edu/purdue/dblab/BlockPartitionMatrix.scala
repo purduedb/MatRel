@@ -186,8 +186,51 @@ class BlockPartitionMatrix (
         multiplyScalar(alpha)
     }
 
+    def *(other: BlockPartitionMatrix, partitioner: Partitioner): BlockPartitionMatrix = {
+        require(nRows() == other.nRows(), s"Two matrices must have the same number of rows. " +
+          s"A.rows: ${nRows()}, B.rows: ${other.nRows()}")
+        require(nCols() == other.nCols(), s"Two matrices must have the same number of cols. " +
+          s"A.cols: ${nCols()}, B.cols: ${other.nCols()}")
+        var rdd1 = blocks
+        if (!rdd1.partitioner.get.isInstanceOf[partitioner.type]) {
+            rdd1 = rdd1.partitionBy(partitioner)
+        }
+        var rdd2 = other.blocks
+        if (!rdd2.partitioner.get.isInstanceOf[partitioner.type]) {
+            rdd2 = rdd2.partitionBy(partitioner)
+        }
+        val rdd = rdd1.zipPartitions(rdd2, preservesPartitioning = true) {
+            case (iter1, iter2) =>
+                val idx2val = new TrieMap[(Int, Int), MLMatrix]()
+                val res = new TrieMap[(Int, Int), MLMatrix]()
+                for (elem <- iter1) {
+                    val key = elem._1
+                    if (!idx2val.contains(key)) idx2val.putIfAbsent(key, elem._2)
+                }
+                for (elem <- iter2) {
+                    val key = elem._1
+                    if (idx2val.contains(key)) {
+                        val tmp = idx2val.get(key).get
+                        res.putIfAbsent(key, LocalMatrix.elementWiseMultiply(tmp, elem._2))
+                    }
+                }
+            res.iterator
+        }
+        new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
+    }
+
     def *:(alpha: Double): BlockPartitionMatrix = {
         multiplyScalar(alpha)
+    }
+
+    def /(alpha: Double): BlockPartitionMatrix = {
+        require(alpha != 0, "Block matrix divided by 0 error!")
+        multiplyScalar(1.0 / alpha)
+    }
+
+    def /:(alpha: Double): BlockPartitionMatrix = {
+        require(alpha != 0, "Block matrix divided by 0 error!")
+        multiplyScalar(1.0 / alpha)
     }
 
     def multiplyScalar(alpha: Double): BlockPartitionMatrix = {
@@ -623,6 +666,13 @@ class BlockPartitionMatrix (
         new BlockPartitionMatrix(prodRDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }
 
+    def frobenius(): Double = {
+        val t = blocks.map { case ((i, j), mat) =>
+            val x = LocalMatrix.frobenius(mat)
+            x * x
+        }.reduce(_ + _)
+        math.sqrt(t)
+    }
 }
 
 object BlockPartitionMatrix {
@@ -744,7 +794,7 @@ object TestBlockPartition {
         val rdd2 = sc.parallelize(arr2, 2)
         val mat1 = new BlockPartitionMatrix(rdd1, 3, 3, 6, 6)
         val mat2 = new BlockPartitionMatrix(rdd2, 4, 4, 6, 6)
-        println(mat1.add(mat2).toLocalMatrix())
+        //println(mat1.add(mat2).toLocalMatrix())
         /*  addition
          *  2.0   3.0   4.0   6.0   7.0   8.0
             8.0   9.0   10.0  12.0  13.0  14.0
@@ -753,7 +803,7 @@ object TestBlockPartition {
             28.0  29.0  30.0  32.0  33.0  34.0
             34.0  35.0  36.0  38.0  39.0  40.0
          */
-        //println((mat1 %*% mat2).toLocalMatrix())
+        println((mat1 %*% mat2).toLocalMatrix())
         /*   multiplication
              51    51    51    72    72    72
              123   123   123   180   180   180

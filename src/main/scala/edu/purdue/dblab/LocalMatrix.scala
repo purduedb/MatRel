@@ -744,6 +744,21 @@ object LocalMatrix {
             case _ => throw new SparkException(s"Unsupported matrix type ${mat1.getClass.getName}")
         }
     }
+
+    def frobenius(mat: MLMatrix): Double = {
+        mat match {
+            case ds: DenseMatrix =>
+                var norm = 0.0
+                for (elem <- ds.values)
+                    norm += elem * elem
+                math.sqrt(norm)
+            case sp: SparseMatrix =>
+                var norm = 0.0
+                for (elem <- sp.values)
+                    norm += elem * elem
+                math.sqrt(norm)
+        }
+    }
 }
 
 object TestSparse {

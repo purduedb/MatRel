@@ -19,15 +19,16 @@ class BlockPartitionMatrix (
     val ROWS_PER_BLK: Int,
     val COLS_PER_BLK: Int,
     private var nrows: Long,
-    private var ncols: Long
-    ) extends Matrix with Logging {
+    private var ncols: Long) extends Matrix with Logging {
 
     val ROW_BLK_NUM = math.ceil(nRows() * 1.0 / ROWS_PER_BLK).toInt
     val COL_BLK_NUM = math.ceil(nCols() * 1.0 / COLS_PER_BLK).toInt
 
     private var groupByCached: RDD[(Int, Iterable[(Int, MLMatrix)])] = null
 
-    private val numPartitions = 8 // 8 workers
+    private val numPartitions: Int = 8 // 8 workers
+
+    private var sparsity: Double = 0.0
 
 
     override def nRows(): Long = {
@@ -55,14 +56,19 @@ class BlockPartitionMatrix (
     }
 
     // sparsity is defined as nnz / (m * n) where m and n are number of rows and cols
-    def sparsity(): Double = {
-        val nnz = blocks.map { case ((rid, cid), mat) =>
-            mat match {
-                case den: DenseMatrix => den.values.length
-                case sp: SparseMatrix => sp.values.length
-            }
-        }.reduce(_ + _)
-        nnz * 1.0 / (nRows() * nCols())
+    // Is this a fast operation? Does there exist any better way to get the precise
+    // sparsity info of the underlying distributed matrix.
+    def getSparsity(): Double = {
+        if (sparsity <= 0) {
+            val nnz = blocks.map { case ((rid, cid), mat) =>
+                mat match {
+                    case den: DenseMatrix => den.values.length
+                    case sp: SparseMatrix => sp.values.length
+                }
+            }.reduce(_ + _)
+            sparsity = nnz * 1.0 / (nRows() * nCols())
+        }
+        sparsity
     }
 
     def stat() = {

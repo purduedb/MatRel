@@ -54,6 +54,17 @@ class BlockPartitionMatrix (
         }.sum().toLong
     }
 
+    // sparsity is defined as nnz / (m * n) where m and n are number of rows and cols
+    def sparsity(): Double = {
+        val nnz = blocks.map { case ((rid, cid), mat) =>
+            mat match {
+                case den: DenseMatrix => den.values.length
+                case sp: SparseMatrix => sp.values.length
+            }
+        }.reduce(_ + _)
+        nnz * 1.0 / (nRows() * nCols())
+    }
+
     def stat() = {
         println("-" * 40 )
         println(s"Block partition matrix has $ROW_BLK_NUM row blks")

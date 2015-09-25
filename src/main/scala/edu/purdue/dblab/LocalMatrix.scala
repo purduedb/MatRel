@@ -3,6 +3,8 @@ package edu.purdue.dblab
 import org.apache.spark.SparkException
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
 
+import scala.collection.immutable.HashMap
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -121,7 +123,13 @@ object LocalMatrix {
     def multiplySparseSparse(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
         require(ma.numCols == mb.numRows, s"Matrix A.numCols must be equals to B.numRows, but found " +
         s"A.numCols = ${ma.numCols}, B.numRows = ${mb.numRows}")
-        var va = ma.values
+        (ma.isTransposed, mb.isTransposed) match {
+            case (false, false) => multiplyCSC_CSC(ma, mb)
+            case (true, true) => multiplyCSR_CSR(ma, mb)
+            case (true, false) => multiplyCSR_CSC(ma, mb)
+            case (false, true) => multiplyCSC_CSR(ma, mb)
+        }
+        /*var va = ma.values
         var rowIdxa = ma.rowIndices
         var colPtra = ma.colPtrs
         if (ma.isTransposed) {
@@ -171,6 +179,177 @@ object LocalMatrix {
         }
         else {
             new SparseMatrix(ma.numRows, mb.numCols, colPtrc, rowIdxc.toArray, vc.toArray).toDense
+        }*/
+    }
+
+    // stores in CSC format
+    private def multiplyCSC_CSC(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
+        val va = ma.values
+        val rowIdxa = ma.rowIndices
+        val colPtra = ma.colPtrs
+        val vb = mb.values
+        val rowIdxb = mb.rowIndices
+        val colPtrb = mb.colPtrs
+        val vc = new ArrayBuffer[Double]()
+        val rowIdxc = new ArrayBuffer[Int]()
+        val colPtrc = new Array[Int](mb.numCols + 1)
+        val coltmp = new Array[Double](ma.numRows)
+        for (jb <- 0 until mb.numCols) {
+            val numPerColb = colPtrb(jb + 1) - colPtrb(jb)
+            arrayClear(coltmp)
+            for(ib <- colPtrb(jb) until colPtrb(jb) + numPerColb) {
+                val alpha = vb(ib)
+                // alpha * the column with idx of rowIdxb(ib)
+                val ja = rowIdxb(ib)
+                val numPerCola = colPtra(ja + 1) - colPtra(ja)
+                for (ia <- colPtra(ja) until colPtra(ja) + numPerCola) {
+                    val idx = rowIdxa(ia)
+                    coltmp(idx) += va(ia) * alpha
+                }
+            }
+            var count = 0
+            for (i <- 0 until coltmp.length) {
+                if (coltmp(i) != 0.0) {
+                    rowIdxc += i
+                    vc += coltmp(i)
+                    count += 1
+                }
+            }
+            colPtrc(jb + 1) = colPtrc(jb) + count
+        }
+        if (ma.numRows * mb.numCols > 2 * colPtrc(colPtrc.length - 1) + colPtrc.length) {
+            new SparseMatrix(ma.numRows, mb.numCols, colPtrc, rowIdxc.toArray, vc.toArray)
+        }
+        else {
+            new SparseMatrix(ma.numRows, mb.numCols, colPtrc, rowIdxc.toArray, vc.toArray).toDense
+        }
+    }
+
+    // stores in CSR format
+    private def multiplyCSR_CSR(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
+        val va = ma.values
+        val colIdxa = ma.rowIndices
+        val rowPtra = ma.colPtrs
+        val vb = mb.values
+        val colIdxb = mb.rowIndices
+        val rowPtrb = mb.colPtrs
+        val vc = new ArrayBuffer[Double]()
+        val colIdxc = new ArrayBuffer[Int]()
+        val rowPtrc = new Array[Int](ma.numRows + 1)
+        val rowtmp = new Array[Double](mb.numCols)
+        for (ia <- 0 until ma.numRows) {
+            val numPerRowa = rowPtra(ia + 1) - rowPtra(ia)
+            arrayClear(rowtmp)
+            for (ja <- rowPtra(ia) until rowPtra(ia) + numPerRowa) {
+                val alpha = va(ja)
+                // alpha * the row with idx of colIdxa(ja)
+                val ib = colIdxa(ja)
+                val numPerRowb = rowPtrb(ib + 1) - rowPtrb(ib)
+                for (jb <- rowPtrb(ib) until rowPtrb(ib) + numPerRowb) {
+                    val idx = colIdxb(jb)
+                    rowtmp(idx) += vb(jb) * alpha
+                }
+            }
+            var count = 0
+            for (i <- 0 until rowtmp.length) {
+                if (rowtmp(i) != 0.0) {
+                    colIdxc += i
+                    vc += rowtmp(i)
+                    count += 1
+                }
+            }
+            rowPtrc(ia + 1) = rowPtrc(ia) + count
+        }
+        if (ma.numRows * mb.numCols > 2 * rowPtrc(rowPtrc.length - 1) + rowPtrc.length) {
+            new SparseMatrix(ma.numRows, mb.numCols, rowPtrc, colIdxc.toArray, vc.toArray, true)
+        }
+        else {
+            new SparseMatrix(ma.numRows, mb.numCols, rowPtrc, colIdxc.toArray, vc.toArray, true).toDense
+        }
+    }
+
+    // stores in CSC format, proceeds in column-by-column fashion
+    private def multiplyCSR_CSC(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
+        val va = ma.values
+        val colIdxa = ma.rowIndices
+        val rowPtra = ma.colPtrs
+        val vb = mb.values
+        val rowIdxb = mb.rowIndices
+        val colPtrb = mb.colPtrs
+        val vc = new ArrayBuffer[Double]()
+        val rowIdxc = new ArrayBuffer[Int]()
+        val colPtrc = new Array[Int](mb.numCols + 1)
+        val coltmp = new Array[Double](ma.numRows)
+        for (jb <- 0 until colPtrb.length - 1) {
+            val num = colPtrb(jb + 1) - colPtrb(jb)
+            val entryColb = new mutable.HashMap[Int, Double]() // store the entries in jb-th col of B
+            for (ib <- colPtrb(jb) until colPtrb(jb) + num) {
+                entryColb.put(rowIdxb(ib), vb(ib))
+            }
+            arrayClear(coltmp)
+            // scan each row of matrix A for multiplication
+            for (ia <- 0 until rowPtra.length - 1) {
+                val count = rowPtra(ia + 1) - rowPtra(ia)
+                for (ja <- rowPtra(ia) until rowPtra(ia) + count) {
+                    if (entryColb.contains(colIdxa(ja))) {
+                        coltmp(ia) += va(ja) * entryColb.get(colIdxa(ja)).get
+                    }
+                }
+            }
+            var count = 0
+            for (i <- 0 until coltmp.length) {
+                if (coltmp(i) != 0.0) {
+                    count += 1
+                    vc += coltmp(i)
+                    rowIdxc += i
+                }
+            }
+            colPtrc(jb + 1) = colPtrc(jb) + count
+        }
+        if (ma.numRows * mb.numCols > 2 * colPtrc(colPtrc.length - 1) + colPtrc.length) {
+            new SparseMatrix(ma.numRows, mb.numCols, colPtrc, rowIdxc.toArray, vc.toArray)
+        }
+        else {
+            new SparseMatrix(ma.numRows, mb.numCols, colPtrc, rowIdxc.toArray, vc.toArray)
+        }
+    }
+
+    // stores in CSC format, proceeds in outer product fashion
+    // k-th col of A multiply with k-th row of B
+    private def multiplyCSC_CSR(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
+        // reserve a buffer for the worse case
+        val buf = new Array[Double](ma.numRows * mb.numCols)
+        val n = ma.numRows
+        // C(i, j) --> buf(i + j*n)
+        val va = ma.values
+        val rowIdxa = ma.rowIndices
+        val colPtra = ma.colPtrs
+        val vb = mb.values
+        val colIdxb = mb.rowIndices
+        val rowPtrb = mb.colPtrs
+        for (ja <- 0 until colPtra.length - 1) {
+            // ja-th col of A
+            val counta = colPtra(ja + 1) - colPtra(ja)
+            val rowValMap = new mutable.HashMap[Int, Double]()
+            for (ia <- colPtra(ja) until colPtra(ja) + counta) {
+                rowValMap.put(rowIdxa(ia), va(ia))
+            }
+            // get ja-th row of B
+            val countb = rowPtrb(ja + 1) - rowPtrb(ja)
+            for (jb <- rowPtrb(ja) until rowPtrb(ja) + countb) {
+                for (elem <- rowValMap) {
+                    val i = elem._1
+                    val j = colIdxb(jb)
+                    buf(i + j*n) += elem._2 * vb(jb)
+                }
+            }
+        }
+        val nnz = buf.count(x => x != 0.0)
+        if (ma.numRows * mb.numCols <= 2 * nnz + mb.numCols) {
+            new DenseMatrix(ma.numRows, mb.numCols, buf)
+        }
+        else {
+            new DenseMatrix(ma.numRows, mb.numCols, buf).toSparse
         }
     }
 
@@ -792,5 +971,7 @@ object TestSparse {
         println(denC)
         println("-" * 20)
         println(LocalMatrix.multiplySparseMatDenseVec(spmat1, denV))
+        println("-" * 20)
+        println(LocalMatrix.multiplySparseSparse(spmat1, spmat2.transpose))
     }
 }

@@ -235,6 +235,39 @@ class BlockPartitionMatrix (
         multiplyScalar(1.0 / alpha)
     }
 
+    def /(other: BlockPartitionMatrix, partitioner: Partitioner): BlockPartitionMatrix = {
+        require(nRows() == other.nRows(), s"Two matrices must have the same number of rows. " +
+          s"A.rows: ${nRows()}, B.rows: ${other.nRows()}")
+        require(nCols() == other.nCols(), s"Two matrices must have the same number of cols. " +
+          s"A.cols: ${nCols()}, B.cols: ${other.nCols()}")
+        var rdd1 = blocks
+        if (!rdd1.partitioner.get.isInstanceOf[partitioner.type]) {
+            rdd1 = rdd1.partitionBy(partitioner)
+        }
+        var rdd2 = other.blocks
+        if (!rdd2.partitioner.get.isInstanceOf[partitioner.type]) {
+            rdd2 = rdd2.partitionBy(partitioner)
+        }
+        val rdd = rdd1.zipPartitions(rdd2, preservesPartitioning = true) {
+            case (iter1, iter2) =>
+                val idx2val = new TrieMap[(Int, Int), MLMatrix]()
+                val res = new TrieMap[(Int, Int), MLMatrix]()
+                for (elem <- iter1) {
+                    val key = elem._1
+                    if (!idx2val.contains(key)) idx2val.putIfAbsent(key, elem._2)
+                }
+                for (elem <- iter2) {
+                    val key = elem._1
+                    if (idx2val.contains(key)) {
+                        val tmp = idx2val.get(key).get
+                        res.putIfAbsent(key, LocalMatrix.elementWiseDivide(tmp, elem._2))
+                    }
+                }
+                res.iterator
+        }
+        new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
+    }
+
     def multiplyScalar(alpha: Double): BlockPartitionMatrix = {
         /*println(blocks.partitions.length + " partitions in blocks RDD" +
           s" with ${nRows()} rows ${nCols()} cols")

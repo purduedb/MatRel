@@ -129,57 +129,6 @@ object LocalMatrix {
             case (true, false) => multiplyCSR_CSC(ma, mb)
             case (false, true) => multiplyCSC_CSR(ma, mb)
         }
-        /*var va = ma.values
-        var rowIdxa = ma.rowIndices
-        var colPtra = ma.colPtrs
-        if (ma.isTransposed) {
-            val tmp = CSR2SCS(ma)
-            rowIdxa = tmp._1
-            colPtra = tmp._2
-            va = tmp._3
-        }
-        var vb = mb.values
-        var rowIdxb = mb.rowIndices
-        var colPtrb = mb.colPtrs
-        val vc = ArrayBuffer[Double]()
-        if (mb.isTransposed) {
-            val tmp = CSR2SCS(mb)
-            rowIdxb = tmp._1
-            colPtrb = tmp._2
-            vb = tmp._3
-        }
-        val rowIdxc = ArrayBuffer[Int]()
-        val colPtrc = new Array[Int](mb.numCols + 1)
-        val coltmp = new Array[Double](ma.numRows)
-        for (jb <- 0 until mb.numCols) {
-            val numPerColb = colPtrb(jb + 1) - colPtrb(jb)
-            arrayClear(coltmp)
-            for(ib <- colPtrb(jb) until colPtrb(jb) + numPerColb) {
-                val alpha = vb(ib)
-                // alpha * the column with idx of rowIdxb(ib)
-                val ja = rowIdxb(ib)
-                val numPerCola = colPtra(ja + 1) - colPtra(ja)
-                for (ia <- colPtra(ja) until colPtra(ja) + numPerCola) {
-                    val idx = rowIdxa(ia)
-                    coltmp(idx) += va(ia) * alpha
-                }
-            }
-            var count = 0
-            for (i <- 0 until coltmp.length) {
-                if (coltmp(i) != 0.0) {
-                    rowIdxc += i
-                    vc += coltmp(i)
-                    count += 1
-                }
-            }
-            colPtrc(jb + 1) = colPtrc(jb) + count
-        }
-        if (ma.numRows * mb.numCols > 2 * colPtrc(colPtrc.length - 1) + colPtrc.length) {
-            new SparseMatrix(ma.numRows, mb.numCols, colPtrc, rowIdxc.toArray, vc.toArray)
-        }
-        else {
-            new SparseMatrix(ma.numRows, mb.numCols, colPtrc, rowIdxc.toArray, vc.toArray).toDense
-        }*/
     }
 
     // stores in CSC format

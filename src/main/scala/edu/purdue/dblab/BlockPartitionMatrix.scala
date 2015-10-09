@@ -26,10 +26,14 @@ class BlockPartitionMatrix (
 
     private var groupByCached: RDD[(Int, Iterable[(Int, MLMatrix)])] = null
 
-    private val numPartitions: Int = 8 // 8 workers
+    val numPartitions: Int = 8 // 8 workers
 
-    private var sparsity: Double = 0.0
+    var sparsity: Double = 0.0
 
+    // these two maps used for sampling current distributed matrix for
+    // estimating matrix product nonzero element numbers
+    val rowBlkMap = scala.collection.mutable.Map[Int, Int]()
+    val colBlkMap = scala.collection.mutable.Map[Int, Int]()
 
     override def nRows(): Long = {
         if (nrows <= 0L) {
@@ -736,6 +740,44 @@ class BlockPartitionMatrix (
             x * x
         }.reduce(_ + _)
         math.sqrt(t)
+    }
+
+    def sample(ratio: Double) = {
+        val sampleRowNum: Int = (ratio * ROW_BLK_NUM).toInt
+        val sampleColNum: Int = (ratio * COL_BLK_NUM).toInt
+        val rowStep: Int = ROW_BLK_NUM / sampleRowNum
+        val colStep: Int = COL_BLK_NUM / sampleColNum
+        for (i <- 0 until sampleRowNum)
+            rowBlkMap += (i*rowStep) -> 0
+        for (j <- 0 until sampleColNum)
+            colBlkMap += (j*colStep) -> 0
+        val rowNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
+            val nnz = mat match {
+                case den: DenseMatrix => den.values.length
+                case sp: SparseMatrix => sp.values.length
+            }
+            (rowIdx, nnz)
+        }.reduceByKey(_ + _)
+        .collect()
+
+        for (elem <- rowNNZ) {
+            if (rowBlkMap.contains(elem._1)) {
+                rowBlkMap(elem._1) = elem._2
+            }
+        }
+        val colNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
+            val nnz = mat match {
+                case den: DenseMatrix => den.values.length
+                case sp: SparseMatrix => sp.values.length
+            }
+            (colIdx, nnz)
+        }.reduceByKey(_ + _)
+        .collect()
+        for (elem <- colNNZ) {
+            if (colBlkMap.contains(elem._1)) {
+                colBlkMap(elem._1) = elem._2
+            }
+        }
     }
 }
 

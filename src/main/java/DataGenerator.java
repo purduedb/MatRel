@@ -102,7 +102,8 @@ public class DataGenerator {
     }
     public static void main(String[] args) {
         if (args.length < 6) {
-            System.out.println("Usage: DateGenerator nrows ncols sparsity skewType skew filename");
+            System.out.println("Usage: DateGenerator nrows[long] ncols[long] sparsity[double] skewType[0/1] skew[double] filename");
+            System.out.println("Note: for skewType, 0 means row skew; 1 means column skew");
             System.exit(1);
         }
         long nrows = Long.parseLong(args[0]);

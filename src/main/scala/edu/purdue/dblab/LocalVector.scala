@@ -8,7 +8,7 @@ import org.apache.spark.mllib.linalg.{Matrix => MLMatrix}
 
 /**
  * Created by yongyangyu on 6/28/15.
- * This companion object provide certain missing helpers for vector operations,
+ * This companion object provides certain missing helpers for vector operations,
  * i.e., inner product, scalar multiplication, addition, etc.
  */
 object LocalVector {

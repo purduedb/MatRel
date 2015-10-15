@@ -106,8 +106,8 @@ public class DataGenerator {
             System.out.println("Note: for skewType, 0 means row skew; 1 means column skew");
             System.exit(1);
         }
-        long nrows = Long.parseLong(args[0]);
-        long ncols = Long.parseLong(args[1]);
+        long nrows = (long)Double.parseDouble(args[0]);
+        long ncols = (long)Double.parseDouble(args[1]);
         double sparsity = Double.parseDouble(args[2]);
         boolean skewType = Integer.parseInt(args[3]) == 0 ? false : true;
         double skew = Double.parseDouble(args[4]);

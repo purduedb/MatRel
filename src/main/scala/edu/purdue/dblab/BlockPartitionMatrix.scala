@@ -50,10 +50,10 @@ class BlockPartitionMatrix (
     }
 
     override def nnz(): Long = {
-        blocks.map{ mat =>
-            mat._2 match {
-              case mdense: DenseMatrix => mdense.values.count( _ != 0).toLong
-              case msparse: SparseMatrix => msparse.values.count( _ != 0).toLong
+        blocks.map{ case ((i, j), mat) =>
+            mat match {
+              case den: DenseMatrix => den.values.count( _ != 0).toLong
+              case sp: SparseMatrix => sp.values.size.toLong
               case _ => 0L
             }
         }.sum().toLong
@@ -742,40 +742,43 @@ class BlockPartitionMatrix (
         math.sqrt(t)
     }
 
+    //TODO: come up with a better sampling method,
+    //TODO: it is too BAD to collect each block info since we only need a small portion of them
     def sample(ratio: Double) = {
-        val sampleRowNum: Int = (ratio * ROW_BLK_NUM).toInt
-        val sampleColNum: Int = (ratio * COL_BLK_NUM).toInt
-        val rowStep: Int = ROW_BLK_NUM / sampleRowNum
+        val sampleColNum: Int = math.max((ratio * COL_BLK_NUM).toInt, 1)
         val colStep: Int = COL_BLK_NUM / sampleColNum
-        for (i <- 0 until sampleRowNum)
-            rowBlkMap += (i*rowStep) -> 0
         for (j <- 0 until sampleColNum)
             colBlkMap += (j*colStep) -> 0
-        val rowNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
-            val nnz = mat match {
-                case den: DenseMatrix => den.values.length
-                case sp: SparseMatrix => sp.values.length
-            }
-            (rowIdx, nnz)
-        }.reduceByKey(_ + _)
-        .collect()
-
-        for (elem <- rowNNZ) {
-            if (rowBlkMap.contains(elem._1)) {
-                rowBlkMap(elem._1) = elem._2
-            }
-        }
         val colNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
             val nnz = mat match {
                 case den: DenseMatrix => den.values.length
                 case sp: SparseMatrix => sp.values.length
             }
             (colIdx, nnz)
-        }.reduceByKey(_ + _)
-        .collect()
+        }.filter(key => colBlkMap.contains(key._2))
+          .reduceByKey(_ + _)
+          .collect()
         for (elem <- colNNZ) {
             if (colBlkMap.contains(elem._1)) {
                 colBlkMap(elem._1) = elem._2
+            }
+        }
+        val sampleRowNum: Int = math.max((ratio * ROW_BLK_NUM).toInt, 1)
+        val rowStep: Int = ROW_BLK_NUM / sampleRowNum
+        for (i <- 0 until sampleRowNum)
+            rowBlkMap += (i * rowStep) -> 0
+        val rowNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
+            val nnz = mat match {
+                case den: DenseMatrix => den.values.length
+                case sp: SparseMatrix => sp.values.length
+            }
+            (rowIdx, nnz)
+        }.filter(key => rowBlkMap.contains(key._1))
+          .reduceByKey(_ + _)
+          .collect()
+        for (elem <- rowNNZ) {
+            if (rowBlkMap.contains(elem._1)) {
+                rowBlkMap(elem._1) = elem._2
             }
         }
     }

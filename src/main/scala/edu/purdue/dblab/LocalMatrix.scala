@@ -2,6 +2,7 @@ package edu.purdue.dblab
 
 import org.apache.spark.SparkException
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
+import org.apache.spark.mllib.linalg.{Matrix => SparkMatrix, DenseMatrix => SparkDense, SparseMatrix => SparkSparse}
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
@@ -885,6 +886,23 @@ object LocalMatrix {
                 for (elem <- sp.values)
                     norm += elem * elem
                 math.sqrt(norm)
+        }
+    }
+
+    def SparkMatrixMultScalar(mat: SparkMatrix, a: Double): SparkMatrix = {
+        mat match {
+            case den: SparkDense =>
+                val mvalues = den.values
+                for (i <- 0 until mvalues.length) {
+                    mvalues(i) = mvalues(i) * a
+                }
+                new SparkDense(den.numRows, den.numCols, mvalues, den.isTransposed)
+            case sp: SparkSparse =>
+                val mvalues = sp.values
+                for (i <- 0 until mvalues.length) {
+                    mvalues(i) = mvalues(i) * a
+                }
+                new SparkSparse(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, mvalues, sp.isTransposed)
         }
     }
 }

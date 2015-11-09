@@ -29,6 +29,7 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.{Row => SQLRow}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.GenericMutableRow
+import org.apache.spark.sql.catalyst.InternalRow
 
 /**
  * Trait for a local matrix.
@@ -139,7 +140,7 @@ private class MatrixUDT extends UserDefinedType[MLMatrix] {
     ))
   }
 
-  override def serialize(obj: Any): SQLRow = {
+  override def serialize(obj: Any): InternalRow = {
     val row = new GenericMutableRow(7)
     obj match {
       case sm: SparseMatrix =>
@@ -167,18 +168,18 @@ private class MatrixUDT extends UserDefinedType[MLMatrix] {
     datum match {
       // TODO: something wrong with UDT serialization, should never happen.
       case m: MLMatrix => m
-      case row: SQLRow =>
-        require(row.length == 7,
-          s"MatrixUDT.deserialize given row with length ${row.length} but requires length == 7")
+      case row: InternalRow =>
+        require(row.numFields == 7,
+          s"MatrixUDT.deserialize given row with length ${row.numFields} but requires length == 7")
         val tpe = row.getByte(0)
         val numRows = row.getInt(1)
         val numCols = row.getInt(2)
-        val values = row.getAs[Iterable[Double]](5).toArray
+        val values = row.getArray(5).toDoubleArray()
         val isTransposed = row.getBoolean(6)
         tpe match {
           case 0 =>
-            val colPtrs = row.getAs[Iterable[Int]](3).toArray
-            val rowIndices = row.getAs[Iterable[Int]](4).toArray
+            val colPtrs = row.getArray(3).toIntArray()
+            val rowIndices = row.getArray(4).toIntArray()
             new SparseMatrix(numRows, numCols, colPtrs, rowIndices, values, isTransposed)
           case 1 =>
             new DenseMatrix(numRows, numCols, values, isTransposed)

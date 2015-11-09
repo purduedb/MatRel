@@ -315,6 +315,14 @@ class BlockPartitionMatrix (
         this
     }
 
+    // add a scalar to existing entries, do not touch 0 entries
+    def +(alpha: Double): BlockPartitionMatrix = {
+        val RDD = blocks.map { case (idx, mat) =>
+            (idx, LocalMatrix.addScalar(mat, alpha))
+        }
+        new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
+    }
+
     def +(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         add(other, (ROWS_PER_BLK, COLS_PER_BLK), genBlockPartitioner())
     }

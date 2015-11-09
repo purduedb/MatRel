@@ -922,6 +922,23 @@ object LocalMatrix {
                 new SparkSparse(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, mvalues, sp.isTransposed)
         }
     }
+
+    def addScalar(mat: MLMatrix, alpha: Double): MLMatrix = {
+        mat match {
+            case ds: DenseMatrix =>
+                val arr = ds.values.clone()
+                for (i <- 0 until arr.length) {
+                    arr(i) = arr(i) + alpha
+                }
+                new DenseMatrix(ds.numRows, ds.numCols, ds.values, ds.isTransposed)
+            case sp: SparseMatrix =>
+                val arr = sp.values.clone()
+                for (i <- 0 until arr.length) {
+                    arr(i) = arr(i) + alpha
+                }
+                new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
+        }
+    }
 }
 
 object TestSparse {

@@ -31,10 +31,12 @@ object PageRankBlockHDFS {
     val coordinateRdd = genCoordinateRdd(sc, graphName)
     val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)
     var matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
-    matrix.partitionByBlockCyclic()
+    //matrix.partitionByBlockCyclic()
+    matrix.partitionBy(new ColumnPartitioner(8))
     val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blkSize, blkSize), 4)
     var x = new BlockPartitionMatrix(vecRdd, blkSize, blkSize, matrix.nCols(), 1)
     var v = x
+    v.partitionBy(new RowPartitioner(8))
     val alpha = 0.85
     matrix = (alpha *:matrix).cache()
     matrix.stat()

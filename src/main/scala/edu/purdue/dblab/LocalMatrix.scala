@@ -889,6 +889,23 @@ object LocalMatrix {
         }
     }
 
+    def matrixPow(mat: MLMatrix, p: Double): MLMatrix = {
+        mat match {
+            case ds: DenseMatrix =>
+                val arr = ds.values.clone()
+                for (i <- 0 until arr.length) {
+                    arr(i) = math.pow(arr(i), p)
+                }
+                new DenseMatrix(ds.numRows, ds.numCols, arr, ds.isTransposed)
+            case sp: SparseMatrix =>
+                val arr = sp.values.clone()
+                for (i <- 0 until arr.length) {
+                    arr(i) = math.pow(arr(i), p)
+                }
+                new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
+        }
+    }
+
     def SparkMatrixMultScalar(mat: SparkMatrix, a: Double): SparkMatrix = {
         mat match {
             case den: SparkDense =>

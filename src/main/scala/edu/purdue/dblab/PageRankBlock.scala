@@ -29,20 +29,23 @@ object PageRankBlock {
       val sc = new SparkContext(conf)
       val coordinateRdd = genCoordinateRdd(sc, graphName)
       val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)
-      val matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
-      matrix.partitionByBlockCyclic()
+      var matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
+      //matrix.partitionByBlockCyclic()
+      matrix.partitionBy(new ColumnPartitioner(8))
       val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blkSize, blkSize), 8)
       var x = new BlockPartitionMatrix(vecRdd, blkSize, blkSize, matrix.nCols(), 1)
-      val v = x
-      v.partitionByBlockCyclic()
+      var v = x
+      //v.partitionByBlockCyclic()
+      v.partitionBy(new RowPartitioner(8))
       val alpha = 0.85
-      //matrix = (alpha *:matrix).cache()
-      matrix.multiplyScalarInPlace(alpha).cache()
+      matrix = (alpha *:matrix).cache()
+      //matrix.multiplyScalarInPlace(alpha).cache()
       matrix.stat()
-      //v = (1.0 - alpha) *:v
-      v.multiplyScalarInPlace(1.0 - alpha)
+      v = (1.0 - alpha) *:v
+      //v.multiplyScalarInPlace(1.0 - alpha)
       val t1 = System.currentTimeMillis()
       for (i <- 0 until niter) {
+        //x = matrix.blockMultiplyDup(x) + (v, (blkSize, blkSize), v.partitioner)
         x =  matrix %*% x + (v, (blkSize, blkSize), v.partitioner)
         //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (blk_col_size, blk_col_size))
       }
@@ -58,7 +61,8 @@ object PageRankBlock {
       for (i <- 0 until 5) {
         println(result(i))
       }*/
-      println(x.topK(5).mkString("\n"))
+      //println(x.topK(5).mkString("\n"))
+      x.blocks.count()
       var t2 = System.currentTimeMillis()
       println("t2 - t1 = " + (t2-t1)/1000.0 + "sec")
       t2 = System.currentTimeMillis()

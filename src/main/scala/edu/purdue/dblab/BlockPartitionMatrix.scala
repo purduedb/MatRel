@@ -315,6 +315,10 @@ class BlockPartitionMatrix (
         this
     }
 
+    def +(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+        add(other, (ROWS_PER_BLK, COLS_PER_BLK), genBlockPartitioner())
+    }
+
     def +(other: BlockPartitionMatrix,
           dimension: PartitionScheme = (ROWS_PER_BLK, COLS_PER_BLK),
           partitioner: Partitioner): BlockPartitionMatrix = {
@@ -514,6 +518,13 @@ class BlockPartitionMatrix (
         tmp.toArray
     }
 
+    def ^(p: Double): BlockPartitionMatrix = {
+        val RDD = blocks.map { case (idx, mat) =>
+            (idx, LocalMatrix.matrixPow(mat, p))
+        }
+        new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
+    }
+
     def %*%(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         multiply(other)
         //blockMultiplyDup(other)
@@ -539,7 +550,7 @@ class BlockPartitionMatrix (
         //val otherMatrix = new BlockPartitionMatrix(rddB, COLS_PER_BLK, COLS_PER_BLK, other.nRows(), other.nCols())
         //val resPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, numWorkers)
 
-        val resPartitioner = new RowPartitioner(numPartitions)
+        val resPartitioner = genBlockPartitioner()//new RowPartitioner(numPartitions)
         if (groupByCached == null) {
             groupByCached = blocks.map{ case ((rowIdx, colIdx), matA) =>
                 (colIdx, (rowIdx, matA))
@@ -552,21 +563,26 @@ class BlockPartitionMatrix (
         val rddC = rdd1.join(rdd2)
           .values
           .flatMap{ case (iterA, iterB) =>
-            val product = mutable.ArrayBuffer[((Int, Int), BM[Double])]()
+            //val product = mutable.ArrayBuffer[((Int, Int), BM[Double])]()
+            val product = mutable.ArrayBuffer[((Int, Int), MLMatrix)]()
             for (blk1 <- iterA) {
                 for (blk2 <- iterB) {
                     val idx = (blk1._1, blk2._1)
                     val c = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
-                    product += ((idx, LocalMatrix.toBreeze(c)))
+                    //product.append((idx, LocalMatrix.toBreeze(c)))
+                    product.append((idx, c))
                 }
             }
             product
-        }.combineByKey(
+        }.reduceByKey(LocalMatrix.add(_, _))
+
+
+        /*  .combineByKey(
             (x: BM[Double]) => x,
             (acc: BM[Double], x) => acc + x,
             (acc1: BM[Double], acc2: BM[Double]) => acc1 + acc2,
             resPartitioner, true, null
-        ).mapValues(LocalMatrix.fromBreeze(_))
+        ).mapValues(x => LocalMatrix.fromBreeze(x))*/
         val t2 = System.currentTimeMillis()
         println("Matrix multiplication takes: " + (t2-t1)/1000.0 + " sec")
         new BlockPartitionMatrix(rddC, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
@@ -744,42 +760,48 @@ class BlockPartitionMatrix (
 
     //TODO: come up with a better sampling method,
     //TODO: it is too BAD to collect each block info since we only need a small portion of them
+     // CHECK this implementation!!!
     def sample(ratio: Double) = {
         val sampleColNum: Int = math.max((ratio * COL_BLK_NUM).toInt, 1)
         val colStep: Int = COL_BLK_NUM / sampleColNum
+        val colSet = scala.collection.mutable.SortedSet[Int]()
         for (j <- 0 until sampleColNum)
-            colBlkMap += (j*colStep) -> 0
+            colSet += j*colStep
         val colNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
-            val nnz = mat match {
-                case den: DenseMatrix => den.values.length
-                case sp: SparseMatrix => sp.values.length
+            if (colSet.contains(colIdx)) {
+                val nnz = mat match {
+                    case den: DenseMatrix => den.values.length
+                    case sp: SparseMatrix => sp.values.length
+                }
+                (colIdx, nnz)
             }
-            (colIdx, nnz)
-        }.filter(key => colBlkMap.contains(key._2))
-          .reduceByKey(_ + _)
-          .collect()
+            else (colIdx, 0)
+        }.filter(x => x._2 != 0)
+         .reduceByKey(_ + _)
+         .collect()
         for (elem <- colNNZ) {
-            if (colBlkMap.contains(elem._1)) {
-                colBlkMap(elem._1) = elem._2
-            }
+            colBlkMap(elem._1) = elem._2
+
         }
         val sampleRowNum: Int = math.max((ratio * ROW_BLK_NUM).toInt, 1)
         val rowStep: Int = ROW_BLK_NUM / sampleRowNum
+        val rowSet = scala.collection.mutable.SortedSet[Int]()
         for (i <- 0 until sampleRowNum)
-            rowBlkMap += (i * rowStep) -> 0
+            rowSet += i * rowStep
         val rowNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
-            val nnz = mat match {
-                case den: DenseMatrix => den.values.length
-                case sp: SparseMatrix => sp.values.length
+            if (rowSet.contains(rowIdx)) {
+                val nnz = mat match {
+                    case den: DenseMatrix => den.values.length
+                    case sp: SparseMatrix => sp.values.length
+                }
+                (rowIdx, nnz)
             }
-            (rowIdx, nnz)
-        }.filter(key => rowBlkMap.contains(key._1))
-          .reduceByKey(_ + _)
-          .collect()
+            else (rowIdx, 0)
+        }.filter(x => x._2 != 0)
+         .reduceByKey(_ + _)
+         .collect()
         for (elem <- rowNNZ) {
-            if (rowBlkMap.contains(elem._1)) {
-                rowBlkMap(elem._1) = elem._2
-            }
+            rowBlkMap(elem._1) = elem._2
         }
     }
 }
@@ -795,7 +817,21 @@ object BlockPartitionMatrix {
         s"But found ROWS_PER_BLK = $ROWS_PER_BLK")
         require(COLS_PER_BLK > 0, s"COLS_PER_BLK needs to be greater than 0. " +
         s"But found COLS_PER_BLK = $COLS_PER_BLK")
-        var colSize = entries.map(x => x.col).max() + 1
+        var colSize = 0L
+        if (COL_NUM > 0) {
+            colSize = COL_NUM
+        }
+        else {
+            colSize = entries.map(x => x.col).max() + 1
+        }
+        var rowSize = 0L
+        if (ROW_NUM > 0) {
+            rowSize = ROW_NUM
+        }
+        else {
+            rowSize = entries.map(x => x.row).max() + 1
+        }
+        /*var colSize = entries.map(x => x.col).max() + 1
         if (COL_NUM > 0 && colSize > COL_NUM) {
             println(s"Computing colSize is greater than COL_NUM, colSize = $colSize, COL_NUM = $COL_NUM")
         }
@@ -804,7 +840,7 @@ object BlockPartitionMatrix {
         if (ROW_NUM > 0 && rowSize > ROW_NUM) {
             println(s"Computing rowSize is greater than ROW_NUM, rowSize = $rowSize, ROW_NUM = $ROW_NUM")
         }
-        if (ROW_NUM > rowSize) rowSize = ROW_NUM
+        if (ROW_NUM > rowSize) rowSize = ROW_NUM */
         val ROW_BLK_NUM = math.ceil(rowSize * 1.0 / ROWS_PER_BLK).toInt
         val COL_BLK_NUM = math.ceil(colSize * 1.0 / COLS_PER_BLK).toInt
         //val partitioner = BlockCyclicPartitioner(ROW_BLK_NUM, COL_BLK_NUM, entries.partitions.length)
@@ -862,19 +898,30 @@ object BlockPartitionMatrix {
     }
     // estimate a proper block size
     def estimateBlockSize(rdd: RDD[Entry]): Int = {
-        val nrows = rdd.map(entry => entry.row)
-          .distinct()
-          .count()
-        val ncols = rdd.map(entry => entry.col)
-          .distinct()
-          .count()
+        val (nrows, ncols) = rdd.map { x =>
+            (x.row+1, x.col+1)
+        }.reduce { (x0, x1) =>
+            (math.max(x0._1, x1._1), math.max(x0._2, x1._2))
+        }
+        println("(nrows, ncols) = " + s"($nrows, $ncols)")
         // get system parameters
         val numWorkers = rdd.context.getExecutorStorageStatus.length - 1
         println(s"numWorkers = $numWorkers")
-        val coresPerWorker = 12
-        //println(s"coresPerWorker = $coresPerWorker")
-        var blkSize = Math.sqrt(nrows * ncols / (numWorkers * coresPerWorker)).toInt
-        blkSize = blkSize - (blkSize % 100) + 100
+        val coresPerWorker = 8
+        println(s"coresPerWorker = $coresPerWorker")
+        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker)).toInt
+        blkSize = blkSize - (blkSize % 1000)
+        blkSize
+    }
+
+    def estimateBlockSizeWithDim(nrows: Long, ncols: Long): Int = {
+        // for Hathi default setting
+        val numWorkers = 10
+        println(s"numWorkers = $numWorkers")
+        val coresPerWorker = 8
+        println(s"coresPerWorker = $coresPerWorker")
+        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker)).toInt
+        blkSize = blkSize - (blkSize % 1000)
         blkSize
     }
 }
@@ -903,7 +950,8 @@ object TestBlockPartition {
         val rdd2 = sc.parallelize(arr2, 2)
         val mat1 = new BlockPartitionMatrix(rdd1, 3, 3, 6, 6)
         val mat2 = new BlockPartitionMatrix(rdd2, 4, 4, 6, 6)
-        //println(mat1.add(mat2).toLocalMatrix())
+        mat1.partitionByBlockCyclic()
+        println((mat1 + mat2).toLocalMatrix())
         /*  addition
          *  2.0   3.0   4.0   6.0   7.0   8.0
             8.0   9.0   10.0  12.0  13.0  14.0
@@ -912,7 +960,7 @@ object TestBlockPartition {
             28.0  29.0  30.0  32.0  33.0  34.0
             34.0  35.0  36.0  38.0  39.0  40.0
          */
-        println((mat1 %*% mat2).toLocalMatrix())
+        //println((mat1 %*% mat2).toLocalMatrix())
         /*   multiplication
              51    51    51    72    72    72
              123   123   123   180   180   180

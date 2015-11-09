@@ -14,7 +14,7 @@ object PageRankMLlib {
         println("Usage: PageRank <graph> [<iter>]")
         System.exit(1)
       }
-      val graphName = args(0)
+      val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
       var niter = 0
       if (args.length > 1) niter = args(1).toInt else niter = 10
       val conf = new SparkConf()

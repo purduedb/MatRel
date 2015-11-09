@@ -939,6 +939,23 @@ object LocalMatrix {
                 new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
         }
     }
+
+    def matrixDivideVector(mat: MLMatrix, vec: MLMatrix): MLMatrix = {
+        val arr = mat.toArray
+        val div = vec.toArray
+        val n = div.length
+        require(arr.length % div.length == 0, s"Dimension error for matrix divide vector, " +
+          s"arr.length=${arr.length}, vec.length=${div.length}")
+        for (i <- 0 until arr.length) {
+            arr(i) = arr(i) / div(i/n)
+        }
+        if (arr.filter(_ != 0).length > 0.1 * arr.length) {
+            new DenseMatrix(mat.numRows, mat.numCols, arr)
+        }
+        else {
+            new DenseMatrix(mat.numRows, mat.numCols, arr).toSparse
+        }
+    }
 }
 
 object TestSparse {

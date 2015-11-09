@@ -256,6 +256,21 @@ class BlockPartitionMatrix (
         multiplyScalar(1.0 / alpha)
     }
 
+    def divideVector(vec: BlockPartitionMatrix): BlockPartitionMatrix = {
+        require(nCols() == vec.nRows(), s"Dimension incompatible matrix.ncols=${nCols()}, " +
+          s"vec.nrows=${vec.nRows()}")
+        val RDD1 = blocks.map { case ((i, j), mat) =>
+            (j, ((i,j), mat))
+        }
+        val RDD2 = vec.blocks.map { case ((i, j), mat) =>
+            (i, mat)
+        }
+        val RDD = RDD1.join(RDD2).map { case (idx, (((i, j), mat1), mat2)) =>
+            ((i, j), LocalMatrix.matrixDivideVector(mat1, mat2))
+        }
+        new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
+    }
+
     def /(other: BlockPartitionMatrix, partitioner: Partitioner): BlockPartitionMatrix = {
         require(nRows() == other.nRows(), s"Two matrices must have the same number of rows. " +
           s"A.rows: ${nRows()}, B.rows: ${other.nRows()}")

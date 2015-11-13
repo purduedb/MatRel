@@ -29,6 +29,7 @@ public class RankData {
             else if (data[mid] > target) hi = mid - 1;
             else lo = mid + 1;
         }
+        System.err.println("Not found number in the array!");
         return -1;
     }
 

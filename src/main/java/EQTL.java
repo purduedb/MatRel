@@ -10,14 +10,19 @@ import java.util.List;
  */
 public class EQTL {
     private final int ell;
+    private boolean nanInMrna;
     private int[][] geno;
     private int[][] mrna;
+    private int[][] Z;
     private int[][][] I;
     private int[][] N;
+    private int[][][] Ni;
     private double[][] S;
+    private int[][] K;
 
     public EQTL(String geno_name, String mrna_name, int l) {
         this.ell = l;
+        nanInMrna = false;
         try {
             // read geno matrix
             FileInputStream fstream = new FileInputStream(geno_name);
@@ -45,11 +50,20 @@ public class EQTL {
             br = new BufferedReader(new InputStreamReader(fstream));
             while ((line = br.readLine()) != null) {
                 if (line.contains("Sample")) continue;
+                if (!nanInMrna && line.contains("NaN")) nanInMrna = true;
                 input.add(RankData.rank(line));
             }
             mrna = new int[input.size()][input.get(0).length];
             for (int i = 0; i < input.size(); i ++) {
                 mrna[i] = input.get(i);
+            }
+            if (nanInMrna) {
+                Z = new int[mrna.length][mrna[0].length];
+                for (int n = 0; n < Z.length; n ++) {
+                    for (int k = 0; k < Z[0].length; k ++) {
+                        Z[n][k] = (mrna[n][k] == 0) ? 0 : 1;
+                    }
+                }
             }
             br.close();
         }
@@ -69,11 +83,25 @@ public class EQTL {
                 }
             }
         }
-        N = new int[I.length][geno.length];
-        for (int i = 0; i < I.length; i ++) {
-            for (int m = 0; m < geno.length; m ++) {
-                for (int k = 0; k < geno[0].length; k ++) {
-                    N[i][m] += I[i][m][k];
+        if (!nanInMrna) {
+            N = new int[I.length][geno.length];
+            for (int i = 0; i < I.length; i++) {
+                for (int m = 0; m < geno.length; m++) {
+                    for (int k = 0; k < geno[0].length; k++) {
+                        N[i][m] += I[i][m][k];
+                    }
+                }
+            }
+        }
+        else { // compute Ni
+            Ni = new int[I.length][Z[0].length][I[0][0].length];
+            for (int i = 0; i < Ni.length; i ++) {
+                for (int n = 0; n < Ni[0].length; n ++) {
+                    for (int m = 0; m < Ni[0][0].length; m ++) {
+                        for (int k = 0; k < geno[0].length; k ++) {
+                            Ni[i][n][m] += Z[n][k] * I[i][m][k];
+                        }
+                    }
                 }
             }
         }
@@ -91,14 +119,36 @@ public class EQTL {
             }
         }
         S = new double[mrna.length][geno.length];
-        int K = geno[0].length;
-        for (int n = 0; n < S.length; n ++) {
-            for (int m = 0; m < S[0].length; m ++) {
-                double tmp = 0.0;
-                for (int i = 0; i < ell; i ++) {
-                    tmp += Si[i][n][m] * Si[i][n][m] / N[i][m];
+        if (!nanInMrna) {
+            int KK = geno[0].length;
+            for (int n = 0; n < S.length; n++) {
+                for (int m = 0; m < S[0].length; m++) {
+                    double tmp = 0.0;
+                    for (int i = 0; i < ell; i++) {
+                        tmp += Si[i][n][m] * Si[i][n][m] / N[i][m];
+                    }
+                    S[n][m] = 12.0 / KK / (KK + 1) * tmp - 3 * (KK + 1);
                 }
-                S[n][m] = 12.0 / K / (K+1) * tmp - 3 * (K+1);
+            }
+        }
+        else {
+            K = new int[mrna.length][geno.length];
+            for (int n = 0; n < K.length; n ++) {
+                for (int m = 0; m < K[0].length; m ++) {
+                    for (int i = 0;i < Ni.length; i ++) {
+                        K[n][m] += Ni[i][n][m];
+                    }
+                }
+            }
+            for (int n = 0; n < S.length; n ++) {
+                for (int m = 0; m < S[0].length; m ++) {
+                    double tmp = 0.0;
+                    for (int i = 0; i < ell; i ++) {
+                        tmp += Si[i][n][m] * Si[i][n][m] / Ni[i][n][m];
+                    }
+                    int KK = K[n][m];
+                    S[n][m] = 12.0 / KK / (KK + 1) * tmp - 3 * (KK + 1);
+                }
             }
         }
     }

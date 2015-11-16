@@ -1,9 +1,12 @@
+import org.apache.commons.collections.map.HashedMap;
+
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by yongyangyu on 11/15/15.
@@ -12,6 +15,8 @@ public class EQTL {
     private final int ell;
     private boolean nanInMrna;
     private int[][] geno;
+    private int[][] rankedMrna;
+    private Map<Long, List<Integer>> nanPos;
     private int[][] mrna;
     private int[][] Z;
     private int[][][] I;
@@ -23,6 +28,8 @@ public class EQTL {
     public EQTL(String geno_name, String mrna_name, int l) {
         this.ell = l;
         nanInMrna = false;
+        nanPos = new HashedMap();
+        long row = 0;
         try {
             // read geno matrix
             FileInputStream fstream = new FileInputStream(geno_name);
@@ -35,7 +42,13 @@ public class EQTL {
                 String[] elems = line.split("\t");
                 int[] x = new int[elems.length-1];
                 for (int i = 0; i < x.length; i ++) {
-                    x[i] = Integer.parseInt(elems[i+1]);
+                    // handling if any entry is missing for geno matrix
+                    if (Double.isNaN(Double.parseDouble(elems[i+1]))) {
+                        x[i] = -1;
+                    }
+                    else {
+                        x[i] = Integer.parseInt(elems[i + 1]);
+                    }
                 }
                 input.add(x);
             }
@@ -51,11 +64,20 @@ public class EQTL {
             while ((line = br.readLine()) != null) {
                 if (line.contains("Sample")) continue;
                 if (!nanInMrna && line.contains("NaN")) nanInMrna = true;
-                input.add(RankData.rank(line));
+                input.add(RankData.rank(line, row++, nanPos));
+            }
+            rankedMrna = new int[input.size()][input.get(0).length];
+            for (int i = 0; i < input.size(); i ++) {
+                rankedMrna[i] = input.get(i);
             }
             mrna = new int[input.size()][input.get(0).length];
             for (int i = 0; i < input.size(); i ++) {
-                mrna[i] = input.get(i);
+                System.arraycopy(rankedMrna[i], 0, mrna[i], 0, mrna[i].length);
+                if (!nanPos.isEmpty() && nanPos.containsKey((long)i)) {
+                    for (int j: nanPos.get((long)i)) {
+                        mrna[i][j] = 0;
+                    }
+                }
             }
             if (nanInMrna) {
                 Z = new int[mrna.length][mrna[0].length];
@@ -175,6 +197,7 @@ public class EQTL {
         EQTL eqtl = new EQTL(geno_name, mrna_name, 2);
         eqtl.generateIAndN();
         eqtl.computeS();
+        eqtl.printMatrix(eqtl.mrna);
         eqtl.printMatrix(eqtl.S);
     }
 }

@@ -1,4 +1,4 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.apps
 
 /**
  * Created by yongyangyu on 10/28/15.

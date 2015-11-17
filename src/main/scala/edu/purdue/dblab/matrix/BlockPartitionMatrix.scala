@@ -1,15 +1,17 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
+import edu.purdue.dblab._
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
+
 import scala.collection.concurrent.TrieMap
 //import java.util.concurrent.ConcurrentHashMap
 //import scala.collection.JavaConversions.asScalaIterator
 
-import scala.collection.mutable
-import scala.collection.mutable.{Map => MMap, ArrayBuffer}
 import breeze.linalg.{Matrix => BM}
+
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 
 /**
  * Created by yongyangyu on 7/15/15.

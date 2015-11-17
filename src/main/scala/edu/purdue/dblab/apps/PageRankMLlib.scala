@@ -1,9 +1,10 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.apps
 
+import edu.purdue.dblab.matrix.{Entry, BlockPartitionMatrix, LocalMatrix}
 import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, MatrixEntry}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.mllib.linalg.{DenseMatrix => SparkDense, SparseMatrix => SparkSparse}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.{SparkConf, SparkContext}
 
 /**
  * Created by yongyangyu on 10/27/15.

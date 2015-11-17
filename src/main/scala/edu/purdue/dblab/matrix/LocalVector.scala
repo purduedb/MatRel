@@ -1,10 +1,8 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
-import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg.{Matrix => MLMatrix, _}
 
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import org.apache.spark.mllib.linalg.{Matrix => MLMatrix}
 
 /**
  * Created by yongyangyu on 6/28/15.

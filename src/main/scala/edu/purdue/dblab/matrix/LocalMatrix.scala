@@ -1,10 +1,9 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
-import org.apache.spark.SparkException
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
-import org.apache.spark.mllib.linalg.{Matrix => SparkMatrix, DenseMatrix => SparkDense, SparseMatrix => SparkSparse}
+import org.apache.spark.SparkException
+import org.apache.spark.mllib.linalg.{DenseMatrix => SparkDense, Matrix => SparkMatrix, SparseMatrix => SparkSparse}
 
-import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 

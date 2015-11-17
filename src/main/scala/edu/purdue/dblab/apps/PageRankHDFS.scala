@@ -1,8 +1,9 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.apps
 
-import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, SparkConf}
+import edu.purdue.dblab.matrix.{LocalVector, RowPartitionMatrix, Entry}
 import org.apache.spark.mllib.linalg._
+import org.apache.spark.rdd.RDD
+import org.apache.spark.{SparkConf, SparkContext}
 
 /**
  * Created by yongyangyu on 7/25/15.

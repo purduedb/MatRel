@@ -1,9 +1,9 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
-import org.apache.spark.{SparkContext, SparkConf, Logging}
-import org.apache.spark.rdd.RDD
+import edu.purdue.dblab.matrix
 import org.apache.spark.mllib.linalg._
-import org.apache.spark.Partitioner
+import org.apache.spark.rdd.RDD
+import org.apache.spark.{Logging, Partitioner, SparkConf, SparkContext}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -22,7 +22,7 @@ case class Row(ridx: Long, rvec: Vector)
 class RowPartitionMatrix (
       val rows: RDD[Row],
       private var _nrows: Long,
-      private var _ncols: Int) extends Matrix with Logging{
+      private var _ncols: Int) extends matrix.Matrix with Logging{
 
     override def nRows(): Long = {
         if (_nrows <= 0) {

@@ -1,4 +1,4 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
 /**
  * Created by yongyangyu on 6/25/15.

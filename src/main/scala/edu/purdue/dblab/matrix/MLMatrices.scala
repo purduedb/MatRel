@@ -1,4 +1,5 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
+
 // export the APIs from mllib for in-place operations
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -19,17 +20,15 @@ package edu.purdue.dblab
 
 import java.util.{Arrays, Random}
 
-import scala.collection.mutable.{ArrayBuilder => MArrayBuilder, HashSet => MHashSet, ArrayBuffer}
-
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
-
-import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
-
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.sql.{Row => SQLRow}
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.catalyst.expressions.GenericMutableRow
+import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericMutableRow
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Row => SQLRow}
+
+import scala.collection.mutable.{ArrayBuffer, ArrayBuilder => MArrayBuilder, HashSet => MHashSet}
 
 /**
  * Trait for a local matrix.

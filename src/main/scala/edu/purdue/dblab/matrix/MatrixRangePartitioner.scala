@@ -1,8 +1,8 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
 import org.apache.spark.Partitioner
-import org.apache.spark.rdd.RDD
 import org.apache.spark.mllib.linalg._
+import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
 

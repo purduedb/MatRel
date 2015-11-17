@@ -1,4 +1,4 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
 /**
  * Created by yongyangyu on 6/17/15.
@@ -7,12 +7,10 @@ package edu.purdue.dblab
  * As long as the dimension of two vector are compatible, they perform any binary operations between
  * themselves.
  */
-import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, SparkConf, Logging}
-import org.apache.spark.SparkContext._
-import org.apache.spark.storage.StorageLevel
+
 import org.apache.spark.mllib.linalg._
-import org.apache.spark.RangePartitioner
+import org.apache.spark.rdd.RDD
+import org.apache.spark.{Logging, SparkConf, SparkContext}
 
 
 case class dvEntry(idx: Long, v: Double) {

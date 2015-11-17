@@ -1,8 +1,8 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.apps
 
+import edu.purdue.dblab.matrix.{Entry, BlockPartitionMatrix, ColumnPartitioner, RowPartitioner}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.{SparkConf, SparkContext}
 
 /**
  * Created by yongyangyu on 7/23/15.

@@ -1,6 +1,4 @@
-package edu.purdue.dblab
-
-import org.apache.spark.mllib.linalg.Vectors
+package edu.purdue.dblab.matrix
 
 /**
  * Created by yongyangyu on 6/16/15.

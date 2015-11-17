@@ -1,5 +1,6 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.apps
 
+import edu.purdue.dblab.matrix.{BlockPartitionMatrix, Entry}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 

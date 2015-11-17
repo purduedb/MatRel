@@ -1,9 +1,11 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.apps
 
+import edu.purdue.dblab.matrix.{Entry, LocalMatrix, BlockPartitionMatrix}
 import helper.RankData
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, SparkConf}
-import util.Random
+import org.apache.spark.{SparkConf, SparkContext}
+
+import scala.util.Random
 
 /**
   * Created by yongyangyu on 11/16/15.

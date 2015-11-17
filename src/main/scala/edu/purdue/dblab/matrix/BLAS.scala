@@ -1,4 +1,5 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
+
 // export APIs from mllib for in-place operations
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -17,11 +18,10 @@ package edu.purdue.dblab
  * limitations under the License.
  */
 
-import com.github.fommil.netlib.{BLAS => NetlibBLAS, F2jBLAS}
 import com.github.fommil.netlib.BLAS.{getInstance => NativeBLAS}
-
+import com.github.fommil.netlib.{BLAS => NetlibBLAS, F2jBLAS}
+import edu.purdue.dblab.matrix.SparseMatrix
 import org.apache.spark.Logging
-
 import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
 
 /**

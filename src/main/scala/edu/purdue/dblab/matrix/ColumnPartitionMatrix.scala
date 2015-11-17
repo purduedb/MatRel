@@ -1,10 +1,9 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg.{Matrix => MLMatrix}
+import edu.purdue.dblab._
+import org.apache.spark.mllib.linalg.{DenseMatrix, Matrix => MLMatrix, _}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, SparkConf, Logging}
-import org.apache.spark.Partitioner
+import org.apache.spark.{Logging, Partitioner, SparkConf, SparkContext}
 
 /**
  * Created by yongyangyu on 7/6/15.

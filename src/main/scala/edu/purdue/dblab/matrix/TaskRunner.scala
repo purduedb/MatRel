@@ -1,12 +1,11 @@
-package edu.purdue.dblab
+package edu.purdue.dblab.matrix
 
-import java.util.concurrent.{LinkedBlockingQueue, ConcurrentLinkedQueue}
+import java.util.concurrent.{ConcurrentLinkedQueue, LinkedBlockingQueue}
 
-import org.apache.spark.{TaskContext, Logging}
+import org.apache.spark.{Logging, TaskContext}
 
 import scala.collection.mutable
-import scala.collection.mutable.HashMap
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 /**
  * Created by yongyangyu on 9/11/15.

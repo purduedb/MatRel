@@ -16,9 +16,9 @@ object EQTL {
     }
     val hdfs = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
     val matrixName1 = hdfs + args(0)
-    val (m1, n1) = (4, 4)//(args(1).toLong, args(2).toLong)
+    val (m1, n1) = (args(1).toLong, args(2).toLong)
     val matrixName2 = hdfs + args(3)
-    val (m2, n2) = (4, 4)//(args(4).toLong, args(5).toLong)
+    val (m2, n2) = (args(4).toLong, args(5).toLong)
     val conf = new SparkConf()
       .setAppName("eQTL")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -32,12 +32,13 @@ object EQTL {
     val sc = new SparkContext(conf)
     val MrnaRDD = genMrnaRDD(sc, matrixName2)
     val mrnaSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m2, n2)
-    val mrnaRank = BlockPartitionMatrix.createFromCoordinateEntries(MrnaRDD, 2, 2, m2, n2)
+    val mrnaRank = BlockPartitionMatrix.createFromCoordinateEntries(MrnaRDD, mrnaSize, mrnaSize, m2, n2)
     //println("mrnaRank")
     //println(mrnaRank.toLocalMatrix())
     val genoRDD = genGenoRDD(sc, matrixName1)
-    val genoSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m1, n1)
-    val geno = BlockPartitionMatrix.createFromCoordinateEntries(genoRDD, 2, 2, m1, n1)
+    //val genoSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m1, n1)
+    // try using the same block size for mrna matrix and geno matrix to avoid reblocking cost
+    val geno = BlockPartitionMatrix.createFromCoordinateEntries(genoRDD, mrnaSize, mrnaSize, m1, n1)
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
         //println(s"I($i)=")

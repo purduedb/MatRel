@@ -1,15 +1,10 @@
-import org.apache.commons.collections.map.HashedMap;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by yongyangyu on 11/13/15.
  */
 public class RankData {
-    public static int[] rank(String line, long row, Map<Long, List<Integer>> pos) {
+    public static int[] rank(String line, int row, Map<Integer, List<Integer>> pos) {
         if (line.contains("Sample")) return new int[0];
         String[] strs = line.split("\t");
         List<Integer> cols = new ArrayList<>();
@@ -54,8 +49,8 @@ public class RankData {
 
     public static void main(String[] args) {
         String line = "10\tNaN\t-0.003084\t0.120763\t0.130911\t-0.133571\tNaN\t-0.075663\t-0.276158\tNaN\t0.415624";
-        long row = 0;
-        Map<Long, List<Integer>> pos = new HashedMap();
+        int row = 0;
+        Map<Integer, List<Integer>> pos = new HashMap<>();
         int[] res = rank(line, row++, pos);
         System.out.println(Arrays.toString(res));
     }

@@ -3,10 +3,7 @@ import org.apache.commons.collections.map.HashedMap;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by yongyangyu on 11/15/15.
@@ -15,21 +12,23 @@ public class EQTL {
     private final int ell;
     private boolean nanInMrna;
     private int[][] geno;
-    private int[][] rankedMrna;
-    private Map<Long, List<Integer>> nanPos;
-    private int[][] mrna;
+    private int[][] rankedMrna; // keep the original rank, put missing entry at the highest rank
+    private Map<Integer, List<Integer>> nanPos;
+    private int[][] mrna; // convert all the missing entry to rank value of 0
     private int[][] Z;
     private int[][][] I;
     private int[][] N;
     private int[][][] Ni;
     private double[][] S;
     private int[][] K;
+    private Map<Integer, List<Integer>> missingCount;
 
     public EQTL(String geno_name, String mrna_name, int l) {
         this.ell = l;
         nanInMrna = false;
+        missingCount = new HashMap<>();
         nanPos = new HashedMap();
-        long row = 0;
+        int row = 0;
         try {
             // read geno matrix
             FileInputStream fstream = new FileInputStream(geno_name);
@@ -37,6 +36,7 @@ public class EQTL {
             BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
 
             String line;
+            row = 0;
             while ((line = br.readLine()) != null) {
                 if (line.contains("Sample")) continue;
                 String[] elems = line.split("\t");
@@ -45,12 +45,21 @@ public class EQTL {
                     // handling if any entry is missing for geno matrix
                     if (Double.isNaN(Double.parseDouble(elems[i+1]))) {
                         x[i] = -1;
+                        if (missingCount.containsKey(row)) {
+                            missingCount.get(row).add(i);
+                        }
+                        else {
+                            List<Integer> list = new ArrayList<>();
+                            list.add(i);
+                            missingCount.put(row, list);
+                        }
                     }
                     else {
                         x[i] = Integer.parseInt(elems[i + 1]);
                     }
                 }
                 input.add(x);
+                row ++;
             }
             geno = new int[input.size()][input.get(0).length];
             for (int i = 0; i < input.size(); i ++) {
@@ -61,6 +70,7 @@ public class EQTL {
             fstream = new FileInputStream(mrna_name);
             input = new ArrayList<>();
             br = new BufferedReader(new InputStreamReader(fstream));
+            row = 0;
             while ((line = br.readLine()) != null) {
                 if (line.contains("Sample")) continue;
                 if (!nanInMrna && line.contains("NaN")) nanInMrna = true;
@@ -100,8 +110,8 @@ public class EQTL {
         for (int i = 0; i < I.length; i ++) {
             for (int m = 0; m < geno.length; m ++) {
                 for (int k = 0; k < geno[0].length; k ++) {
-                    if (geno[m][k] == i)
-                        I[i][m][k] = 1;
+                        if (geno[m][k] == i)
+                            I[i][m][k] = 1;
                 }
             }
         }
@@ -171,6 +181,62 @@ public class EQTL {
                     int KK = K[n][m];
                     S[n][m] = 12.0 / KK / (KK + 1) * tmp - 3 * (KK + 1);
                 }
+            }
+        }
+        if (!missingCount.isEmpty()) {
+            computeMissingInS();
+        }
+    }
+
+    private void computeMissingInS() {
+        int total = geno[0].length;
+        int[] order = new int[total];
+        for (int i = 0; i < order.length; i ++) {
+            order[i] = i+1;
+        }
+        for (int col: missingCount.keySet()) {
+            int KK = total - missingCount.get(col).size();
+            // for each row in S, we need to update every entry
+            for (int j = 0; j < rankedMrna.length; j ++) {
+                int[] mrnaOrder = rankedMrna[j];
+                int[][] genoRank = new int[ell][geno[0].length];
+                // set values in genoRank
+                for (int i = 0; i < genoRank.length; i ++) {
+                    for (int k = 0; k < mrnaOrder.length; k++) {
+                        genoRank[i][mrnaOrder[k]-1] = I[i][col][k];
+                    }
+                }
+                int[] inner = new int[ell];
+                for (int i = 0; i < inner.length; i ++) {
+                    for (int m = 0; m < order.length; m ++) {
+                        inner[i] += order[m] * genoRank[i][m];
+                    }
+                }
+                //System.out.println(Arrays.toString(inner));
+                int[] cumSum = new int[total];
+                int[] currRow = geno[col];
+                for (int i = 0; i < currRow.length; i ++) {
+                    cumSum[mrnaOrder[i]-1] = currRow[i] < 0 ? 1 : 0;
+                }
+                for (int i = 1; i < cumSum.length; i ++) {
+                    cumSum[i] += cumSum[i-1];
+                }
+                System.out.println(Arrays.toString(cumSum));
+                for (int i = 0; i < inner.length; i ++) {
+                    for (int m = 0; m < cumSum.length; m ++) {
+                        inner[i] -= cumSum[m] * genoRank[i][m];
+                    }
+                }
+
+                for (int i = 0; i < inner.length; i ++) {
+                    inner[i] = inner[i] * inner[i];
+                }
+                double tmp = 0.0;
+                for (int i = 0; i < ell; i ++) {
+                    tmp += inner[i] * 1.0 / N[i][col];
+                }
+                
+                S[j][col] = 12.0 / KK / (KK + 1) * tmp - 3 * (KK + 1);
             }
         }
     }

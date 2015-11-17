@@ -7,7 +7,7 @@ Specially, we are aiming at enhancing the performance of matrix operation on blo
 
 ### Usage
 A typical usage of the library is as follows, 
-```javascript
+```scala
 var s = "JavaScript syntax highlighting";
 alert(s);
 ```

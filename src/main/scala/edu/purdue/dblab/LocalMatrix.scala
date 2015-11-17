@@ -930,7 +930,7 @@ object LocalMatrix {
                 for (i <- 0 until arr.length) {
                     arr(i) = arr(i) + alpha
                 }
-                new DenseMatrix(ds.numRows, ds.numCols, ds.values, ds.isTransposed)
+                new DenseMatrix(ds.numRows, ds.numCols, arr, ds.isTransposed)
             case sp: SparseMatrix =>
                 val arr = sp.values.clone()
                 for (i <- 0 until arr.length) {
@@ -954,6 +954,34 @@ object LocalMatrix {
         }
         else {
             new DenseMatrix(mat.numRows, mat.numCols, arr).toSparse
+        }
+    }
+
+    def matrixEquals(mat: MLMatrix, v: Double): MLMatrix = {
+        mat match {
+            case den: DenseMatrix =>
+                val values = den.values.clone()
+                for (i <- 0 until values.length) {
+                    if (values(i) == v) {
+                        values(i) == 1
+                    }
+                    else {
+                        values(i) = 0
+                    }
+                }
+                new DenseMatrix(mat.numRows, mat.numCols, values)
+            case sp: SparseMatrix =>
+                val dense = sp.toDense
+                val values = dense.values.clone()
+                for (i <- 0 until values.length) {
+                    if (values(i) == v) {
+                        values(i) = 1
+                    }
+                    else {
+                        values(i) = 0
+                    }
+                }
+                new DenseMatrix(mat.numRows, mat.numCols, values)
         }
     }
 }

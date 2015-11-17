@@ -6,12 +6,42 @@ import java.util.*;
  * Created by yongyangyu on 11/13/15.
  */
 public class RankData {
-    public static int[] rank(String line, int row, Map<Integer, List<Integer>> pos) {
+    public static int[] rankWithNoMissing(String line) {
         if (line.contains("Sample")) return new int[0];
         String[] strs = line.split("\t");
         List<Integer> cols = new ArrayList<>();
         double[] data = new double[strs.length-1];
         int nanCnt = 0;
+        for (int i = 0; i < data.length; i ++) {
+            data[i] = Double.parseDouble(strs[i+1]);
+            if (Double.isNaN(data[i])) {
+                nanCnt ++;
+                cols.add(i);
+            }
+        }
+        double[] cp = new double[data.length];
+        System.arraycopy(data, 0, cp, 0, data.length);
+        Arrays.sort(cp);
+        int [] res = new int[data.length];
+        for (int i = 0; i < res.length; i ++) {
+            if (Double.isNaN(data[i])) {
+                res[i] = data.length - nanCnt + 1;
+                nanCnt --;
+            }
+            else {
+                res[i] = binSearch(cp, data[i]) + 1;
+            }
+        }
+        return res;
+    }
+
+    public static int[] rank(String line, Map<Integer, List<Integer>> pos) {
+        if (line.contains("Sample")) return new int[0];
+        String[] strs = line.split("\t");
+        List<Integer> cols = new ArrayList<>();
+        double[] data = new double[strs.length-1];
+        int nanCnt = 0;
+        int row = Integer.parseInt(strs[0]);
         for (int i = 0; i < data.length; i ++) {
             data[i] = Double.parseDouble(strs[i+1]);
             if (Double.isNaN(data[i])) {
@@ -51,9 +81,8 @@ public class RankData {
 
     public static void main(String[] args) {
         String line = "10\tNaN\t-0.003084\t0.120763\t0.130911\t-0.133571\tNaN\t-0.075663\t-0.276158\tNaN\t0.415624";
-        int row = 0;
         Map<Integer, List<Integer>> pos = new HashMap<>();
-        int[] res = rank(line, row++, pos);
+        int[] res = rank(line, pos);
         System.out.println(Arrays.toString(res));
     }
 }

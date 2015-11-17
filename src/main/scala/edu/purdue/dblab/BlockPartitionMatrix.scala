@@ -251,6 +251,8 @@ class BlockPartitionMatrix (
         multiplyScalar(1.0 / alpha)
     }
 
+    // This method may need some caution if the matrix is sparse.
+    // What should be the correct semantics for divided by 0 entries?
     def /:(alpha: Double): BlockPartitionMatrix = {
         require(alpha != 0, "Block matrix divided by 0 error!")
         multiplyScalar(1.0 / alpha)
@@ -946,6 +948,20 @@ object BlockPartitionMatrix {
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker)).toInt
         blkSize = blkSize - (blkSize % 1000)
         blkSize
+    }
+
+    def createVectorE(blkMat: BlockPartitionMatrix): BlockPartitionMatrix = {
+        val RDD = blkMat.blocks.filter {
+            case ((i, j), mat) => i == 0
+        }.map { case ((i, j), mat) =>
+            val arr = new Array[Double](mat.numCols)
+            for (x <- 0 until arr.length) {
+                arr(x) = 1.0
+            }
+            val matrix: MLMatrix = new DenseMatrix(1, mat.numCols, arr)
+            ((i, j), matrix)
+        }
+        new BlockPartitionMatrix(RDD, blkMat.ROWS_PER_BLK, blkMat.COLS_PER_BLK, 1, blkMat.nCols()).t
     }
 }
 

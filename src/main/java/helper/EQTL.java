@@ -70,11 +70,10 @@ public class EQTL {
             fstream = new FileInputStream(mrna_name);
             input = new ArrayList<>();
             br = new BufferedReader(new InputStreamReader(fstream));
-            row = 0;
             while ((line = br.readLine()) != null) {
                 if (line.contains("Sample")) continue;
                 if (!nanInMrna && line.contains("NaN")) nanInMrna = true;
-                input.add(RankData.rank(line, row++, nanPos));
+                input.add(RankData.rank(line, nanPos));
             }
             rankedMrna = new int[input.size()][input.get(0).length];
             for (int i = 0; i < input.size(); i ++) {

@@ -1,5 +1,3 @@
-import org.apache.commons.collections.map.HashedMap;
-
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
@@ -27,7 +25,7 @@ public class EQTL {
         this.ell = l;
         nanInMrna = false;
         missingCount = new HashMap<>();
-        nanPos = new HashedMap();
+        nanPos = new HashMap<>();
         int row = 0;
         try {
             // read geno matrix

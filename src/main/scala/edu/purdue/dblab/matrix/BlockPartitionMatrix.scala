@@ -342,6 +342,10 @@ class BlockPartitionMatrix (
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
     }
 
+    def -(alpha: Double): BlockPartitionMatrix = {
+        this.+(-alpha)
+    }
+
     def +(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         add(other, (ROWS_PER_BLK, COLS_PER_BLK), genBlockPartitioner())
     }

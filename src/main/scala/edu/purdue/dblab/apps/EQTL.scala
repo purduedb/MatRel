@@ -82,7 +82,7 @@ object EQTL {
   def genMrnaRDD(sc: SparkContext, name: String): RDD[Entry] = {
       val lines = sc.textFile(name, 8)
       lines.map { line =>
-          if (line.contains("Sample")) {
+          if (line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
               Array(Entry(-1, -1, -1))
           }
           else {
@@ -101,7 +101,7 @@ object EQTL {
   def genGenoRDD(sc: SparkContext, name: String): RDD[Entry] = {
       val lines = sc.textFile(name, 8)
       lines.map { line =>
-          if (line.contains("Sample")) {
+          if (line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
               Array(Entry(-1, -1, -1))
           }
           else {

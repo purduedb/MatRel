@@ -372,7 +372,8 @@ class BlockPartitionMatrix (
         // simply case when both matrices are partitioned in the same fashion
         if (ROWS_PER_BLK == other.ROWS_PER_BLK && COLS_PER_BLK == other.COLS_PER_BLK &&
             ROWS_PER_BLK == dimension._1 && COLS_PER_BLK == dimension._2) {
-            addSameDim(blocks, other.blocks, ROWS_PER_BLK, COLS_PER_BLK)
+            addSameDim(blocks.partitionBy(partitioner), other.blocks.partitionBy(partitioner),
+                ROWS_PER_BLK, COLS_PER_BLK)
         }
         // need to repartition the matrices according to the specification
         else {
@@ -409,7 +410,8 @@ class BlockPartitionMatrix (
             // place holder
             val t2 = System.currentTimeMillis()
             println("Matrix addition takes: " + (t2-t1)/1000.0 + " sec")
-            addSameDim(rddA, rddB, dimension._1, dimension._2)
+            addSameDim(rddA.partitionBy(partitioner), rddB.partitionBy(partitioner),
+                dimension._1, dimension._2)
         }
     }
 

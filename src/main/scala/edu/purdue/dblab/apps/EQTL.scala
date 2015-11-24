@@ -111,7 +111,9 @@ object EQTL {
               for (j <- 0 until arr.length) {
                   if (strArr(j+1).equals("NaN") || strArr(j+1).toInt == -1) {
                       // randomly assign for missing data
-                      arr(j) = Entry(row, j, Random.nextInt(3))
+                      //arr(j) = Entry(row, j, Random.nextInt(3))
+                      // always assign missing data to 0, maybe better than randomly assigning
+                      arr(j) = Entry(row, j, 0)
                   }
                   else {
                       arr(j) = Entry(row, j, strArr(j + 1).toDouble)

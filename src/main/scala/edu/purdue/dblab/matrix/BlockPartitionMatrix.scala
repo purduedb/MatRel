@@ -84,6 +84,7 @@ class BlockPartitionMatrix (
         println(s"Each block size is $ROWS_PER_BLK by $COLS_PER_BLK")
         println(s"Matrix has ${nRows()} rows")
         println(s"Matrix has ${nCols()} cols")
+        println(s"block RDD has ${blocks.count()} nonzero blocks")
         println("-" * 40 )
     }
 
@@ -942,7 +943,8 @@ object BlockPartitionMatrix {
         println(s"numWorkers = $numWorkers")
         val coresPerWorker = 8
         println(s"coresPerWorker = $coresPerWorker")
-        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker)).toInt
+        // make each core to process 4 blocks
+        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 16)).toInt
         blkSize = blkSize - (blkSize % 1000)
         blkSize
     }
@@ -953,7 +955,8 @@ object BlockPartitionMatrix {
         println(s"numWorkers = $numWorkers")
         val coresPerWorker = 8
         println(s"coresPerWorker = $coresPerWorker")
-        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker)).toInt
+        // make each core to process 4 blocks
+        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 16)).toInt
         blkSize = blkSize - (blkSize % 1000)
         blkSize
     }

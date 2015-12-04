@@ -1,6 +1,5 @@
 package edu.purdue.dblab.matrix
 
-import edu.purdue.dblab._
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 
@@ -591,6 +590,21 @@ class BlockPartitionMatrix (
             }.groupByKey().cache()
         }
         val rdd1 = groupByCached
+        println("Collecting skew info for column partition ...")
+        /*val arr = blocks.map { case ((rowIdx, colIdx), mat) =>
+            var count = 0
+            mat match {
+                case dm: DenseMatrix => count = dm.values.length
+                case sp: SparseMatrix => count = sp.values.length
+                case _ => count = 0
+            }
+            (colIdx, count)
+        }.reduceByKey(_ + _)
+         .collect()
+        for ((x, c) <- arr) {
+            println(s"colId = $x, count = $c")
+        }*/
+
         val rdd2 = rddB.map{ case ((rowIdx, colIdx), matB) =>
             (rowIdx, (colIdx, matB))
         }.groupByKey()
@@ -944,7 +958,7 @@ object BlockPartitionMatrix {
         val coresPerWorker = 8
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
-        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 16)).toInt
+        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
         blkSize
     }
@@ -956,7 +970,7 @@ object BlockPartitionMatrix {
         val coresPerWorker = 8
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
-        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 16)).toInt
+        var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
         blkSize
     }
@@ -1001,7 +1015,7 @@ object TestBlockPartition {
         val mat1 = new BlockPartitionMatrix(rdd1, 3, 3, 6, 6)
         val mat2 = new BlockPartitionMatrix(rdd2, 4, 4, 6, 6)
         mat1.partitionByBlockCyclic()
-        println((mat1 + mat2).toLocalMatrix())
+        //println((mat1 + mat2).toLocalMatrix())
         /*  addition
          *  2.0   3.0   4.0   6.0   7.0   8.0
             8.0   9.0   10.0  12.0  13.0  14.0
@@ -1010,7 +1024,7 @@ object TestBlockPartition {
             28.0  29.0  30.0  32.0  33.0  34.0
             34.0  35.0  36.0  38.0  39.0  40.0
          */
-        //println((mat1 %*% mat2).toLocalMatrix())
+        println((mat1 %*% mat2).toLocalMatrix())
         /*   multiplication
              51    51    51    72    72    72
              123   123   123   180   180   180

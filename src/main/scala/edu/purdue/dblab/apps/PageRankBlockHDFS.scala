@@ -33,11 +33,11 @@ object PageRankBlockHDFS {
     val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)
     var matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
     //matrix.partitionByBlockCyclic()
-    matrix.partitionBy(new ColumnPartitioner(8))
+    matrix.partitionBy(new ColumnPartitioner(matrix.COL_BLK_NUM))
     val vecRdd = sc.parallelize(BlockPartitionMatrix.onesMatrixList(matrix.nCols(), 1, blkSize, blkSize), 4)
     var x = new BlockPartitionMatrix(vecRdd, blkSize, blkSize, matrix.nCols(), 1)
     var v = x
-    v.partitionBy(new RowPartitioner(8))
+    v.partitionBy(new RowPartitioner(matrix.COL_BLK_NUM))
     val alpha = 0.85
     matrix = (alpha *:matrix).cache()
     matrix.stat()

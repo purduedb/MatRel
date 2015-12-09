@@ -47,28 +47,36 @@ object EQTL {
         I(i) = genComponentOfI(geno, i)
         //println(I(i).toLocalMatrix())
     }
+    println("finish generating all I's ...")
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
         N(i) = I(i) %*% BlockPartitionMatrix.createVectorE(I(i))
         //println(s"N($i) = ")
         //println(N(i).toLocalMatrix())
     }
+    println("finish computing N(i) ...")
     val Si = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until Si.length) {
         Si(i) = mrnaRank %*% (I(i).t)
         //println(s"Si($i) = ")
         //println(Si(i).toLocalMatrix())
     }
+    println("finish computing Si ...")
     val KK = geno.nCols()
     var S = (Si(0) ^ 2.0).divideVector(N(0))
+    println("finish generating initial S ...")
     for (i <- 1 until 3) {
         if (N(i).nnz() != 0) {
-            //println(s"i=$i" + "*"*20)
+            println(s"i=$i" + "*"*20)
             S = S + (Si(i) ^ 2.0).divideVector(N(i))
         }
     }
+    println("finish computing S ...")
     S = S * (12.0 / KK / (KK+1)) + (-3.0)*(KK+1)
-    println(S.toLocalMatrix())
+    // printing for test purpose
+    //println(S.toLocalMatrix())
+    println("saving files to HDFS ...")
+    S.saveAsTextFile(hdfs + "tmp_result/eqtl")
     Thread.sleep(10000)
   }
 

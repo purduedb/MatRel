@@ -87,6 +87,10 @@ class BlockPartitionMatrix (
         println("-" * 40 )
     }
 
+    def saveAsTextFile(path: String) = {
+        blocks.saveAsTextFile(path)
+    }
+
     def partitioner = blocks.partitioner.get
 
     private type MatrixBlk = ((Int, Int), MLMatrix)
@@ -590,8 +594,8 @@ class BlockPartitionMatrix (
             }.groupByKey().cache()
         }
         val rdd1 = groupByCached
-        println("Collecting skew info for column partition ...")
-        /*val arr = blocks.map { case ((rowIdx, colIdx), mat) =>
+        /*println("Collecting skew info for column partition ...")
+        val arr = blocks.map { case ((rowIdx, colIdx), mat) =>
             var count = 0
             mat match {
                 case dm: DenseMatrix => count = dm.values.length
@@ -960,7 +964,12 @@ object BlockPartitionMatrix {
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
-        blkSize
+        if (blkSize == 0) {
+            1000
+        }
+        else {
+            blkSize
+        }
     }
 
     def estimateBlockSizeWithDim(nrows: Long, ncols: Long): Int = {
@@ -972,7 +981,12 @@ object BlockPartitionMatrix {
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
-        blkSize
+        if (blkSize == 0) {
+            1000
+        }
+        else {
+            blkSize
+        }
     }
 
     def createVectorE(blkMat: BlockPartitionMatrix): BlockPartitionMatrix = {

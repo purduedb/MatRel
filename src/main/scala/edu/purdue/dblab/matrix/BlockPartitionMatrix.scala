@@ -51,13 +51,16 @@ class BlockPartitionMatrix (
     }
 
     override def nnz(): Long = {
-        blocks.map{ case ((i, j), mat) =>
+        println("computing nnz ...")
+        val cnt = blocks.map{ case ((i, j), mat) =>
             mat match {
-              case den: DenseMatrix => den.values.count( _ != 0).toLong
-              case sp: SparseMatrix => sp.values.size.toLong
+              case den: DenseMatrix => den.values.length.toLong
+              case sp: SparseMatrix => sp.values.length.toLong
               case _ => 0L
             }
-        }.sum().toLong
+        }.reduce(_ + _)
+        println("finish nnz computing ...")
+        cnt
     }
 
     // sparsity is defined as nnz / (m * n) where m and n are number of rows and cols
@@ -563,8 +566,42 @@ class BlockPartitionMatrix (
     }
 
     def %*%(other: BlockPartitionMatrix): BlockPartitionMatrix = {
-        multiply(other)
-        //blockMultiplyDup(other)
+        // check for special case
+        if (COL_BLK_NUM == 1 && other.ROW_BLK_NUM == 1) {
+            multiplySuperOuterProduct(other)
+        }
+        else {
+            multiply(other)
+        }
+    }
+
+    def multiplySuperOuterProduct(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+        require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
+          s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
+        // here we suppose size(B) < size(A) for A %*% B
+        val numPartitions = blocks.partitions.size
+        partitionBy(new RowPartitioner(numPartitions))
+        // broadcast the smaller matrix to each block of the large matrix
+        val dupRDD = duplicateCrossPartitions(other.blocks, numPartitions)
+                    .map(elem => ((elem._1, elem._1), elem._2))
+                    .partitionBy(new RowPartitioner(numPartitions))
+        val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
+                    val buffer = new ArrayBuffer[MatrixBlk]()
+                    for (elem <- iter1) {
+                        val rowId = elem._1._1
+                        val mat = elem._2
+                        for (rowBlk <- iter2) {
+                            val blks = rowBlk._2
+                            for (e <- blks) {
+                                val colId = e._1._2
+                                val v = LocalMatrix.matrixMultiplication(mat, e._2)
+                                buffer.append(((rowId, colId), v))
+                            }
+                        }
+                    }
+                    buffer.iterator
+                }
+        new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
     }
 
     // TODO: currently the repartitioning of A * B will perform on matrix B
@@ -1022,12 +1059,22 @@ object TestBlockPartition {
         val n2 = new DenseMatrix(4,2,Array[Double](2,2,2,4,2,2,2,4))
         val n3 = new DenseMatrix(2,4,Array[Double](3,3,3,3,3,3,4,4))
         val n4 = new DenseMatrix(2,2,Array[Double](4,4,4,4))
+        val x1 = new DenseMatrix(3,1,Array[Double](1,2,3))
+        val x2 = new DenseMatrix(3,1,Array[Double](4,5,6))
+        val y1 = new DenseMatrix(1,3,Array[Double](1,2,3))
+        val y2 = new DenseMatrix(1,3,Array[Double](4,5,6))
         val arr1 = Array[((Int, Int), MLMatrix)](((0,0),m1), ((0,1), m2), ((1,0), m3), ((1,1), m4))
         val arr2 = Array[((Int, Int), MLMatrix)](((0,0),n1), ((0,1), n2), ((1,0), n3), ((1,1), n4))
+        val arrx = Array[((Int, Int), MLMatrix)](((0,0),x1), ((1,0),x2))
+        val arry = Array[((Int, Int), MLMatrix)](((0,0),y1), ((0,1),y2))
         val rdd1 = sc.parallelize(arr1, 2)
         val rdd2 = sc.parallelize(arr2, 2)
+        val rddx = sc.parallelize(arrx, 2)
+        val rddy = sc.parallelize(arry, 2)
         val mat1 = new BlockPartitionMatrix(rdd1, 3, 3, 6, 6)
         val mat2 = new BlockPartitionMatrix(rdd2, 4, 4, 6, 6)
+        val matx = new BlockPartitionMatrix(rddx, 3,3,6,1)
+        val maty = new BlockPartitionMatrix(rddy, 3,3,1,6)
         mat1.partitionByBlockCyclic()
         //println((mat1 + mat2).toLocalMatrix())
         /*  addition
@@ -1038,7 +1085,7 @@ object TestBlockPartition {
             28.0  29.0  30.0  32.0  33.0  34.0
             34.0  35.0  36.0  38.0  39.0  40.0
          */
-        println((mat1 %*% mat2).toLocalMatrix())
+        //println((mat1 %*% mat2).toLocalMatrix())
         /*   multiplication
              51    51    51    72    72    72
              123   123   123   180   180   180
@@ -1047,7 +1094,7 @@ object TestBlockPartition {
              339   339   339   504   504   504
              411   411   411   612   612   612
          */
-
+        println((matx %*% maty).toLocalMatrix())
 
         /*val mat = List[(Long, Long)]((0, 0), (0,1), (0,2), (0,3), (0, 4), (0, 5), (1, 0), (1, 2),
             (2, 3), (2, 4), (3,1), (3,2), (3, 4), (4, 5), (5, 4))

@@ -1,11 +1,9 @@
 package edu.purdue.dblab.apps
 
-import edu.purdue.dblab.matrix.{Entry, LocalMatrix, BlockPartitionMatrix}
+import edu.purdue.dblab.matrix.{SparseMatrix, DenseMatrix, Entry, LocalMatrix, BlockPartitionMatrix}
 import helper.RankData
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-
-import scala.util.Random
 
 /**
   * Created by yongyangyu on 11/16/15.
@@ -43,22 +41,52 @@ object EQTL {
     val geno = BlockPartitionMatrix.createFromCoordinateEntries(genoRDD, mrnaSize, mrnaSize, m1, n1)
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
-        //println(s"I($i)=")
+        println(s"I($i) blocks: ")
         I(i) = genComponentOfI(geno, i)
+        /*val arr = I(i).blocks.map {case ((i, j), mat) =>
+            val num = mat match {
+              case dm: DenseMatrix => dm.values.length
+              case sp: SparseMatrix => sp.values.length
+            }
+          ((i, j), num)
+        }.collect()
+        for (elem <- arr) {
+            println(elem._1 + ": " + elem._2)
+        }*/
         //println(I(i).toLocalMatrix())
     }
     println("finish generating all I's ...")
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
         N(i) = I(i) %*% BlockPartitionMatrix.createVectorE(I(i))
-        //println(s"N($i) = ")
+        println(s"N($i) blocks: ")
+        val arr = N(i).blocks.map { case ((i, j), mat) =>
+            val num = mat match {
+              case dm: DenseMatrix => dm.values.length
+              case sp: SparseMatrix => sp.values.length
+            }
+          ((i, j), num)
+        }.collect()
+        for (elem <- arr) {
+            println(elem._1 + ": " + elem._2)
+        }
         //println(N(i).toLocalMatrix())
     }
     println("finish computing N(i) ...")
     val Si = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until Si.length) {
         Si(i) = mrnaRank %*% (I(i).t)
-        //println(s"Si($i) = ")
+        println(s"Si($i) blocks: ")
+        val arr = Si(i).blocks.map { case ((i, j), mat) =>
+            val num = mat match {
+              case dm: DenseMatrix => dm.values.length
+              case sp: SparseMatrix => sp.values.length
+            }
+          ((i, j), num)
+        }.collect()
+        for (elem <- arr) {
+            println(s"${elem._1}: ${elem._2}")
+        }
         //println(Si(i).toLocalMatrix())
     }
     println("finish computing Si ...")
@@ -66,15 +94,27 @@ object EQTL {
     var S = (Si(0) ^ 2.0).divideVector(N(0))
     println("finish generating initial S ...")
     for (i <- 1 until 3) {
-        if (N(i).nnz() != 0) {
+        //if (N(i).nnz() != 0) {
             println(s"i=$i" + "*"*20)
             S = S + (Si(i) ^ 2.0).divideVector(N(i))
-        }
+            println("S blocks")
+            val arr = S.blocks.map { case ((i, j), mat) =>
+                val num = mat match {
+                  case dm: DenseMatrix => dm.values.length
+                  case sp: SparseMatrix => sp.values.length
+                }
+              ((i, j), num)
+            }.collect()
+            for (elem <- arr) {
+                println(s"${elem._1}: ${elem._2}")
+            }
+        //}
     }
     println("finish computing S ...")
     S = S * (12.0 / KK / (KK+1)) + (-3.0)*(KK+1)
     // printing for test purpose
     //println(S.toLocalMatrix())
+    println(S.blocks.first()._2.numRows)
     println("saving files to HDFS ...")
     S.saveAsTextFile(hdfs + "tmp_result/eqtl")
     Thread.sleep(10000)

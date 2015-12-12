@@ -14,7 +14,7 @@ object EQTL {
       println("Usage: geno_matrix m1 n1 mrna_matrix m2 n2")
       System.exit(1)
     }
-    val hdfs = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
+    val hdfs = "hdfs://openstack-vm-11-143.rcac.purdue.edu:8022/user/yu163/"//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
     val matrixName1 = hdfs + args(0)
     val (m1, n1) = (args(1).toLong, args(2).toLong)
     val matrixName2 = hdfs + args(3)
@@ -41,7 +41,7 @@ object EQTL {
     val geno = BlockPartitionMatrix.createFromCoordinateEntries(genoRDD, mrnaSize, mrnaSize, m1, n1)
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
-        println(s"I($i) blocks: ")
+        //println(s"I($i) blocks: ")
         I(i) = genComponentOfI(geno, i)
         /*val arr = I(i).blocks.map {case ((i, j), mat) =>
             val num = mat match {
@@ -58,9 +58,9 @@ object EQTL {
     println("finish generating all I's ...")
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
-        N(i) = I(i) %*% BlockPartitionMatrix.createVectorE(I(i))
-        println(s"N($i) blocks: ")
-        val arr = N(i).blocks.map { case ((i, j), mat) =>
+        N(i) = I(i).sumAlongRow()
+        //println(s"N($i) blocks: ")
+        /*val arr = N(i).blocks.map { case ((i, j), mat) =>
             val num = mat match {
               case dm: DenseMatrix => dm.values.length
               case sp: SparseMatrix => sp.values.length
@@ -69,7 +69,7 @@ object EQTL {
         }.collect()
         for (elem <- arr) {
             println(elem._1 + ": " + elem._2)
-        }
+        }*/
         //println(N(i).toLocalMatrix())
     }
     println("finish computing N(i) ...")
@@ -90,7 +90,7 @@ object EQTL {
         //println(Si(i).toLocalMatrix())
     }
     println("finish computing Si ...")
-    val KK = geno.nCols()
+    /*val KK = geno.nCols()
     var S = (Si(0) ^ 2.0).divideVector(N(0))
     println("finish generating initial S ...")
     for (i <- 1 until 3) {
@@ -116,7 +116,7 @@ object EQTL {
     //println(S.toLocalMatrix())
     println(S.blocks.first()._2.numRows)
     println("saving files to HDFS ...")
-    S.saveAsTextFile(hdfs + "tmp_result/eqtl")
+    S.saveAsTextFile(hdfs + "tmp_result/eqtl") */
     Thread.sleep(10000)
   }
 

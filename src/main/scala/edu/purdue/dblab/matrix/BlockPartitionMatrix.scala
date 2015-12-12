@@ -567,25 +567,43 @@ class BlockPartitionMatrix (
 
     def %*%(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         // check for special case
+        // i.e., outer-product
         if (COL_BLK_NUM == 1 && other.ROW_BLK_NUM == 1) {
-            multiplySuperOuterProduct(other)
+            multiplyOuterProduct(other)
         }
         else {
             multiply(other)
         }
     }
 
-    def multiplySuperOuterProduct(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+    def multiplyOuterProduct(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
           s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
-        // here we suppose size(B) < size(A) for A %*% B
-        val numPartitions = blocks.partitions.size
-        partitionBy(new RowPartitioner(numPartitions))
+        // For eQTL use-cases, size(A) < size(B), should broadcast A
+        val numPartitions = other.blocks.partitions.size
+        other.partitionBy(new ColumnPartitioner(numPartitions))
         // broadcast the smaller matrix to each block of the large matrix
-        val dupRDD = duplicateCrossPartitions(other.blocks, numPartitions)
+        val dupRDD = duplicateCrossPartitions(blocks, numPartitions)
                     .map(elem => ((elem._1, elem._1), elem._2))
-                    .partitionBy(new RowPartitioner(numPartitions))
-        val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
+                    .partitionBy(new ColumnPartitioner(numPartitions))
+
+        val RDD = dupRDD.zipPartitions(other.blocks, preservesPartitioning = true) { (iter1, iter2) =>
+                val buffer = new ArrayBuffer[MatrixBlk]()
+                for (elem <- iter2) {
+                    val colId = elem._1._2
+                    val mat = elem._2
+                    for (colBlk <- iter1) {
+                        val blks = colBlk._2
+                        for (e <- blks) {
+                            val rowId = e._1._1
+                            val v = LocalMatrix.matrixMultiplication(e._2, mat)
+                            buffer.append(((rowId, colId), v))
+                        }
+                    }
+                }
+                buffer.iterator
+        }
+        /*val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
                     val buffer = new ArrayBuffer[MatrixBlk]()
                     for (elem <- iter1) {
                         val rowId = elem._1._1
@@ -600,7 +618,7 @@ class BlockPartitionMatrix (
                         }
                     }
                     buffer.iterator
-                }
+                }*/
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
     }
 
@@ -847,6 +865,19 @@ class BlockPartitionMatrix (
         math.sqrt(t)
     }
 
+    def sumAlongRow(): BlockPartitionMatrix = { // one partition may contain multiple row blocks!!
+        val rdd = blocks.map { case ((rowIdx, colIdx), mat) =>
+            val arr = Array.fill[Double](mat.numCols)(1.0)
+            val e = new DenseMatrix(mat.numCols, 1, arr)
+            val prod = LocalMatrix.matrixMultiplication(mat, e)
+            (rowIdx, prod)
+        }.reduceByKey(LocalMatrix.add(_, _))
+        .map { case (idx, mat) =>
+            ((idx, 0), mat)
+        }
+        new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), 1L)
+    }
+
     //TODO: come up with a better sampling method,
     //TODO: it is too BAD to collect each block info since we only need a small portion of them
      // CHECK this implementation!!!
@@ -1002,7 +1033,7 @@ object BlockPartitionMatrix {
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
         if (blkSize == 0) {
-            1000
+            10000
         }
         else {
             blkSize
@@ -1019,7 +1050,7 @@ object BlockPartitionMatrix {
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
         if (blkSize == 0) {
-            1000
+            10000
         }
         else {
             blkSize
@@ -1085,7 +1116,7 @@ object TestBlockPartition {
             28.0  29.0  30.0  32.0  33.0  34.0
             34.0  35.0  36.0  38.0  39.0  40.0
          */
-        //println((mat1 %*% mat2).toLocalMatrix())
+        //println((mat1 %*% mat2).sumAlongRow().toLocalMatrix())
         /*   multiplication
              51    51    51    72    72    72
              123   123   123   180   180   180

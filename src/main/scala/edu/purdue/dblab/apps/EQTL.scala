@@ -102,7 +102,7 @@ object EQTL {
     println(s"S number of partitions: " + S.blocks.partitions.length)
     println("finish generating initial S ...")
     for (i <- 1 until 3) {
-        if (N(i).nnz() != 0) {
+        //if (N(i).nnz() != 0) {
             println(s"i=$i" + "*"*20)
             //println(s"N($i).nnz = " + N(i).nnz)
             S = S + Si(i).divideVector(N(i))//S + (Si(i) ^ 2.0).divideVector(N(i))
@@ -119,7 +119,7 @@ object EQTL {
             for (elem <- arr) {
                 println(s"${elem._1}: ${elem._2}")
             }*/
-        }
+        //}
     }
     println("finish computing S ...")
     S = S * (12.0 / KK / (KK+1)) + (-3.0)*(KK+1)

@@ -950,7 +950,9 @@ object LocalMatrix {
                     val div = vec.toArray
                     val n = div.length
                     for (i <- 0 until arr.length) {
-                        arr(i) = arr(i) / div(i/n)
+                        if (div(i/n) != 0) { // avoid divided by zero
+                            arr(i) = arr(i) / div(i/n)
+                        }
                     }
                     new DenseMatrix(mat.numRows, mat.numCols, arr)
             case sp: SparseMatrix =>
@@ -962,7 +964,9 @@ object LocalMatrix {
                         val count = colPtr(cid+1) - colPtr(cid)
                         for (i <- 0 until count) {
                             val idx = colPtr(cid) + i
-                            arr(idx) = arr(idx) / div(cid)
+                            if (div(cid) != 0) { // avoid divied by zero
+                                arr(idx) = arr(idx) / div(cid)
+                            }
                         }
                     }
                     new SparseMatrix(sp.numRows, sp.numCols, colPtr, rowIdx, arr)

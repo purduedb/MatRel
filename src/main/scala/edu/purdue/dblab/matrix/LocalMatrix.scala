@@ -974,27 +974,41 @@ object LocalMatrix {
         mat match {
             case den: DenseMatrix =>
                 val values = den.values.clone()
+                var nnz = 0L
                 for (i <- 0 until values.length) {
                     if (values(i) == v) {
                         values(i) == 1
+                        nnz += 1
                     }
                     else {
                         values(i) = 0
                     }
                 }
-                new DenseMatrix(mat.numRows, mat.numCols, values)
+                if (nnz > 0.1 * den.numRows * den.numCols) {
+                    new DenseMatrix(mat.numRows, mat.numCols, values)
+                }
+                else {
+                    new DenseMatrix(mat.numRows, mat.numCols, values).toSparse
+                }
             case sp: SparseMatrix =>
                 val dense = sp.toDense
                 val values = dense.values.clone()
+                var nnz = 0L
                 for (i <- 0 until values.length) {
                     if (values(i) == v) {
                         values(i) = 1
+                        nnz += 1
                     }
                     else {
                         values(i) = 0
                     }
                 }
-                new DenseMatrix(mat.numRows, mat.numCols, values)
+                if (nnz > 0.1 * sp.numRows * sp.numCols) {
+                    new DenseMatrix(mat.numRows, mat.numCols, values)
+                }
+                else {
+                    new DenseMatrix(mat.numRows, mat.numCols, values).toSparse
+                }
         }
     }
 }

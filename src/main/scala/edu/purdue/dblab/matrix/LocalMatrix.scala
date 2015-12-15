@@ -940,19 +940,33 @@ object LocalMatrix {
     }
 
     def matrixDivideVector(mat: MLMatrix, vec: MLMatrix): MLMatrix = {
-        val arr = mat.toArray
-        val div = vec.toArray
-        val n = div.length
-        require(arr.length % div.length == 0, s"Dimension error for matrix divide vector, " +
-          s"arr.length=${arr.length}, vec.length=${div.length}")
-        for (i <- 0 until arr.length) {
-            arr(i) = arr(i) / div(i/n)
-        }
-        if (arr.filter(_ != 0).length > 0.1 * arr.length) {
-            new DenseMatrix(mat.numRows, mat.numCols, arr)
-        }
-        else {
-            new DenseMatrix(mat.numRows, mat.numCols, arr).toSparse
+        // we know that vec is a dense matrix according to the application
+        // mat can be dense or sparse
+        require(mat.numCols == vec.numRows, s"Dimension error for matrix divide vector, " +
+          s"mat.numCols=${mat.numCols}, vec.numRows=${vec.numRows}")
+        mat match {
+            case dm: DenseMatrix =>
+                    val arr = dm.values
+                    val div = vec.toArray
+                    val n = div.length
+                    for (i <- 0 until arr.length) {
+                        arr(i) = arr(i) / div(i/n)
+                    }
+                    new DenseMatrix(mat.numRows, mat.numCols, arr)
+            case sp: SparseMatrix =>
+                    val arr = sp.values
+                    val div = vec.toArray
+                    val rowIdx = sp.rowIndices
+                    val colPtr = sp.colPtrs
+                    for (cid <- 0 until colPtr.length-1) {
+                        val count = colPtr(cid+1) - colPtr(cid)
+                        for (i <- 0 until count) {
+                            val idx = colPtr(cid) + i
+                            arr(idx) = arr(idx) / div(cid)
+                        }
+                    }
+                    new SparseMatrix(sp.numRows, sp.numCols, colPtr, rowIdx, arr)
+            case _ => throw new SparkException("Local matrix format not recognized!")
         }
     }
 
@@ -1018,5 +1032,7 @@ object TestSparse {
         println(LocalMatrix.multiplySparseMatDenseVec(spmat1, denV))
         println("-" * 20)
         println(LocalMatrix.multiplySparseSparse(spmat1, spmat2.transpose))
+        println(spmat1)
+        println(LocalMatrix.matrixDivideVector(spmat1, denV))
     }
 }

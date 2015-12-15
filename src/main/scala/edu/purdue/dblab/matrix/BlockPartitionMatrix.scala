@@ -581,6 +581,7 @@ class BlockPartitionMatrix (
           s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         // For eQTL use-cases, size(A) < size(B), should broadcast A
         val numPartitions = other.blocks.partitions.size
+        println(s"#partitions = $numPartitions")
         other.partitionBy(new ColumnPartitioner(numPartitions))
         // broadcast the smaller matrix to each block of the large matrix
         val dupRDD = duplicateCrossPartitions(blocks, numPartitions)
@@ -1033,7 +1034,7 @@ object BlockPartitionMatrix {
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
         if (blkSize == 0) {
-            10000
+            1000
         }
         else {
             blkSize
@@ -1050,7 +1051,7 @@ object BlockPartitionMatrix {
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
         blkSize = blkSize - (blkSize % 1000)
         if (blkSize == 0) {
-            10000
+            1000
         }
         else {
             blkSize

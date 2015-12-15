@@ -94,6 +94,10 @@ class BlockPartitionMatrix (
         blocks.saveAsTextFile(path)
     }
 
+    def repartition(count: Int) = {
+        this.blocks = blocks.repartition(count)
+    }
+
     def partitioner = blocks.partitioner.get
 
     private type MatrixBlk = ((Int, Int), MLMatrix)

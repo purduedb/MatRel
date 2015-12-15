@@ -51,15 +51,15 @@ class BlockPartitionMatrix (
     }
 
     override def nnz(): Long = {
-        println("computing nnz ...")
+        //println("computing nnz ...")
         val cnt = blocks.map{ case ((i, j), mat) =>
             mat match {
-              case den: DenseMatrix => den.values.length.toLong
+              case den: DenseMatrix => den.values.filter(x => x != 0).length
               case sp: SparseMatrix => sp.values.length.toLong
               case _ => 0L
             }
         }.reduce(_ + _)
-        println("finish nnz computing ...")
+        //println("finish nnz computing ...")
         cnt
     }
 

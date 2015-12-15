@@ -26,21 +26,21 @@ object EQTL {
       .set("spark.shuffle.compress", "false")
       .set("spark.cores.max", "64")
       .set("spark.executor.memory", "6g")
-      .set("spark.default.parallelism", "256")
+      .set("spark.default.parallelism", "40")
       .set("spark.akka.frameSize", "64")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
     val MrnaRDD = genMrnaRDD(sc, matrixName2)
     val mrnaSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m2, n2)
     val mrnaRank = BlockPartitionMatrix.createFromCoordinateEntries(MrnaRDD, mrnaSize, mrnaSize, m2, n2)
-    mrnaRank.repartition(24)
+    //mrnaRank.repartition(24)
     //println("mrnaRank")
     //println(mrnaRank.toLocalMatrix())
     val genoRDD = genGenoRDD(sc, matrixName1)
     //val genoSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m1, n1)
     // try using the same block size for mrna matrix and geno matrix to avoid reblocking cost
     val geno = BlockPartitionMatrix.createFromCoordinateEntries(genoRDD, mrnaSize, mrnaSize, m1, n1)
-    geno.repartition(24)
+    //geno.repartition(24)
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
         //println(s"I($i) blocks: ")
@@ -62,7 +62,7 @@ object EQTL {
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
         N(i) = I(i).sumAlongRow()
-        N(i).repartition(24)
+        //N(i).repartition(24)
         println(s"N($i) number of partitions: " + N(i).blocks.partitions.length)
         //println(s"N($i) blocks: ")
         /*val arr = N(i).blocks.map { case ((i, j), mat) =>
@@ -98,13 +98,16 @@ object EQTL {
     println("finish computing Si ...")
     val KK = geno.nCols()
     var S = Si(0).divideVector(N(0))//(Si(0) ^ 2.0).divideVector(N(0))
+    //println(S.toLocalMatrix())
     println(s"S number of partitions: " + S.blocks.partitions.length)
     println("finish generating initial S ...")
     for (i <- 1 until 3) {
-        //if (N(i).nnz() != 0) {
-            //println(s"i=$i" + "*"*20)
+        if (N(i).nnz() != 0) {
+            println(s"i=$i" + "*"*20)
+            //println(s"N($i).nnz = " + N(i).nnz)
             S = S + Si(i).divideVector(N(i))//S + (Si(i) ^ 2.0).divideVector(N(i))
             println(s"S number of partitions: " + S.blocks.partitions.length)
+            //println(S.toLocalMatrix())
             /*println("S blocks")
             val arr = S.blocks.map { case ((i, j), mat) =>
                 val num = mat match {
@@ -116,7 +119,7 @@ object EQTL {
             for (elem <- arr) {
                 println(s"${elem._1}: ${elem._2}")
             }*/
-        //}
+        }
     }
     println("finish computing S ...")
     S = S * (12.0 / KK / (KK+1)) + (-3.0)*(KK+1)
@@ -124,6 +127,7 @@ object EQTL {
     // printing for test purpose
     //println(S.toLocalMatrix())
     println("saving files to HDFS ...")
+   // println(S.toLocalMatrix())
     S.saveAsTextFile(hdfs + "tmp_result/eqtl")
     Thread.sleep(10000)
   }

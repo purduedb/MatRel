@@ -33,14 +33,16 @@ object EQTL {
     val MrnaRDD = genMrnaRDD(sc, matrixName2)
     val mrnaSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m2, n2)
     val mrnaRank = BlockPartitionMatrix.createFromCoordinateEntries(MrnaRDD, mrnaSize, mrnaSize, m2, n2)
-    mrnaRank.repartition(10)
+    val numPartitions = conf.getInt("spark.executor.instances", 24)
+    println(s"numPartitions = $numPartitions")
+    mrnaRank.repartition(numPartitions)
     //println("mrnaRank")
     //println(mrnaRank.toLocalMatrix())
     val genoRDD = genGenoRDD(sc, matrixName1)
     //val genoSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m1, n1)
     // try using the same block size for mrna matrix and geno matrix to avoid reblocking cost
     val geno = BlockPartitionMatrix.createFromCoordinateEntries(genoRDD, mrnaSize, mrnaSize, m1, n1)
-    geno.repartition(10)
+    geno.repartition(numPartitions)
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
         //println(s"I($i) blocks: ")
@@ -62,7 +64,7 @@ object EQTL {
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
         N(i) = I(i).sumAlongRow()
-        N(i).repartition(10)
+        N(i).repartition(numPartitions)
         println(s"N($i) number of partitions: " + N(i).blocks.partitions.length)
         //println(s"N($i) blocks: ")
         /*val arr = N(i).blocks.map { case ((i, j), mat) =>

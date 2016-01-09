@@ -878,7 +878,14 @@ class BlockPartitionMatrix (
             (rowIdx, prod)
         }.reduceByKey(LocalMatrix.add(_, _))
         .map { case (idx, mat) =>
-            ((idx, 0), mat)
+            val arr = mat.toArray
+            for (i <- 0 until arr.length) { // avoid divide by 0
+                if (arr(i) == 0.0) {
+                    arr(i) = 1.0
+                }
+            }
+            val dense = new DenseMatrix(mat.numRows, mat.numCols, arr)
+            ((idx, 0), dense.asInstanceOf[MLMatrix])
         }
         new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), 1L)
     }

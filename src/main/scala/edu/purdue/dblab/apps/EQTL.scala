@@ -99,6 +99,7 @@ object EQTL {
     }
     println("finish computing Si ...")
     val KK = geno.nCols()
+    println(s"KK = $KK")
     var S = Si(0).divideVector(N(0))//(Si(0) ^ 2.0).divideVector(N(0))
     //println(S.toLocalMatrix())
     println(s"S number of partitions: " + S.blocks.partitions.length)

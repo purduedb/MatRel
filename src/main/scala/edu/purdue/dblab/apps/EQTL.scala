@@ -14,7 +14,7 @@ object EQTL {
       println("Usage: geno_matrix m1 n1 mrna_matrix m2 n2")
       System.exit(1)
     }
-    val hdfs = "hdfs://openstack-vm-11-143.rcac.purdue.edu:8022/user/yu163/"//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
+    val hdfs = "hdfs://openstack-vm-11-143.rcac.purdue.edu:8022/user/yu163/"//"hdfs://10.100.121.126:8022/"//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
     val matrixName1 = hdfs + args(0)
     val (m1, n1) = (args(1).toLong, args(2).toLong)
     val matrixName2 = hdfs + args(3)
@@ -24,7 +24,7 @@ object EQTL {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "64")
+      .set("spark.cores.max", "30")
       .set("spark.executor.memory", "6g")
       //.set("spark.default.parallelism", "64")
       .set("spark.akka.frameSize", "64")
@@ -34,7 +34,7 @@ object EQTL {
     val mrnaSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m2, n2)
     val mrnaRank = BlockPartitionMatrix.createFromCoordinateEntries(MrnaRDD, mrnaSize, mrnaSize, m2, n2)
     val numPartitions = conf.getInt("spark.executor.instances", 24)
-    println(s"numPartitions = $numPartitions")
+    //println(s"numPartitions = $numPartitions")
     mrnaRank.repartition(numPartitions)
     //println("mrnaRank")
     //println(mrnaRank.toLocalMatrix())
@@ -45,7 +45,7 @@ object EQTL {
     geno.repartition(numPartitions)
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
-        //println(s"I($i) blocks: ")
+        println(s"I($i) blocks: ")
         I(i) = genComponentOfI(geno, i)
         println(s"I($i) number of partitions: " + I(i).blocks.partitions.length)
         /*val arr = I(i).blocks.map {case ((i, j), mat) =>
@@ -64,6 +64,11 @@ object EQTL {
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
         N(i) = I(i).sumAlongRow()
+        /*val tmp = N(i).blocks.filter(x => x._1 == (1,0)).collect()
+        if (tmp.length > 0) {
+          println(s"key = ${tmp(0)._1}")
+          println(s"${tmp(0)._2}")
+        }*/
         N(i).repartition(numPartitions)
         println(s"N($i) number of partitions: " + N(i).blocks.partitions.length)
         //println(s"N($i) blocks: ")
@@ -82,7 +87,7 @@ object EQTL {
     println("finish computing N(i) ...")
     val Si = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until Si.length) {
-        Si(i) = (mrnaRank %*% (I(i).t)) ^ 2.0//mrnaRank %*% (I(i).t)
+        Si(i) = (mrnaRank %*% I(i).t) ^ 2.0//mrnaRank %*% (I(i).t)
         println(s"Si($i) number of partitions: " + Si(i).blocks.partitions.length)
         /*println(s"Si($i) blocks: ")
         val arr = Si(i).blocks.map { case ((i, j), mat) =>

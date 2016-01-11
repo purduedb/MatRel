@@ -891,15 +891,15 @@ object LocalMatrix {
     def matrixPow(mat: MLMatrix, p: Double): MLMatrix = {
         mat match {
             case ds: DenseMatrix =>
-                val arr = ds.values.clone()
+                val arr = new Array[Double](ds.values.length)
                 for (i <- 0 until arr.length) {
-                    arr(i) = math.pow(arr(i), p)
+                    arr(i) = math.pow(ds.values(i), p)
                 }
                 new DenseMatrix(ds.numRows, ds.numCols, arr, ds.isTransposed)
             case sp: SparseMatrix =>
-                val arr = sp.values.clone()
+                val arr = new Array[Double](sp.values.length)
                 for (i <- 0 until arr.length) {
-                    arr(i) = math.pow(arr(i), p)
+                    arr(i) = math.pow(sp.values(i), p)
                 }
                 new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
         }
@@ -925,15 +925,15 @@ object LocalMatrix {
     def addScalar(mat: MLMatrix, alpha: Double): MLMatrix = {
         mat match {
             case ds: DenseMatrix =>
-                val arr = ds.values.clone()
+                val arr = new Array[Double](ds.values.length)
                 for (i <- 0 until arr.length) {
-                    arr(i) = arr(i) + alpha
+                    arr(i) = ds.values(i) + alpha
                 }
                 new DenseMatrix(ds.numRows, ds.numCols, arr, ds.isTransposed)
             case sp: SparseMatrix =>
-                val arr = sp.values.clone()
+                val arr = new Array[Double](sp.values.length)
                 for (i <- 0 until arr.length) {
-                    arr(i) = arr(i) + alpha
+                    arr(i) = sp.values(i) + alpha
                 }
                 new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
         }
@@ -950,8 +950,11 @@ object LocalMatrix {
                     val div = vec.toArray
                     val n = div.length
                     for (i <- 0 until arr.length) {
-                        if (div(i/n) != 0) { // avoid divided by zero
+                        if (div(i/n) != 0) { // avoid dividing by zero
                             arr(i) = arr(i) / div(i/n)
+                        }
+                        else {
+                            arr(i) = 0.0
                         }
                     }
                     new DenseMatrix(mat.numRows, mat.numCols, arr)
@@ -964,8 +967,11 @@ object LocalMatrix {
                         val count = colPtr(cid+1) - colPtr(cid)
                         for (i <- 0 until count) {
                             val idx = colPtr(cid) + i
-                            if (div(cid) != 0) { // avoid divied by zero
+                            if (div(cid) != 0) { // avoid dividing by zero
                                 arr(idx) = arr(idx) / div(cid)
+                            }
+                            else {
+                                arr(idx) = 0.0
                             }
                         }
                     }
@@ -977,7 +983,7 @@ object LocalMatrix {
     def matrixEquals(mat: MLMatrix, v: Double): MLMatrix = {
         mat match {
             case den: DenseMatrix =>
-                val values = den.values.clone()
+                val values = den.toArray
                 var nnz = 0L
                 for (i <- 0 until values.length) {
                     if (values(i) == v) {
@@ -995,8 +1001,7 @@ object LocalMatrix {
                     new DenseMatrix(mat.numRows, mat.numCols, values).toSparse
                 }
             case sp: SparseMatrix =>
-                val dense = sp.toDense
-                val values = dense.values.clone()
+                val values = sp.toArray
                 var nnz = 0L
                 for (i <- 0 until values.length) {
                     if (values(i) == v) {

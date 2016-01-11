@@ -594,50 +594,52 @@ class BlockPartitionMatrix (
 
         val RDD = dupRDD.zipPartitions(other.blocks, preservesPartitioning = true) { (iter1, iter2) =>
                 val buffer = new ArrayBuffer[MatrixBlk]()
+                val buffer1 = new ArrayBuffer[MatrixBlk]()
+                for (blkIter <- iter1) {
+                    val blk = blkIter._2
+                    buffer1.appendAll(blk)
+                }
                 for (elem <- iter2) {
                     val colId = elem._1._2
                     val mat = elem._2
-                    for (colBlk <- iter1) {
-                        val blks = colBlk._2
-                        for (e <- blks) {
-                            val rowId = e._1._1
-                            val v = LocalMatrix.matrixMultiplication(e._2, mat)
-                            buffer.append(((rowId, colId), v))
-                        }
+                    for (e <- buffer1) {
+                        val rowId = e._1._1
+                        val v = LocalMatrix.matrixMultiplication(e._2, mat)
+                        buffer.append(((rowId, colId), v))
                     }
                 }
                 buffer.iterator
         }
-        /*val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
-                    val buffer = new ArrayBuffer[MatrixBlk]()
-                    for (elem <- iter1) {
-                        val rowId = elem._1._1
-                        val mat = elem._2
-                        for (rowBlk <- iter2) {
-                            val blks = rowBlk._2
-                            for (e <- blks) {
-                                val colId = e._1._2
-                                val v = LocalMatrix.matrixMultiplication(mat, e._2)
-                                buffer.append(((rowId, colId), v))
-                            }
-                        }
+/*val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
+            val buffer = new ArrayBuffer[MatrixBlk]()
+            for (elem <- iter1) {
+                val rowId = elem._1._1
+                val mat = elem._2
+                for (rowBlk <- iter2) {
+                    val blks = rowBlk._2
+                    for (e <- blks) {
+                        val colId = e._1._2
+                        val v = LocalMatrix.matrixMultiplication(mat, e._2)
+                        buffer.append(((rowId, colId), v))
                     }
-                    buffer.iterator
-                }*/
+                }
+            }
+            buffer.iterator
+        }*/
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
-    }
+}
 
     // TODO: currently the repartitioning of A * B will perform on matrix B
     // TODO: if blocks of B do not conform with blocks of A, need to find an optimal strategy
     def multiply(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         val t1 = System.currentTimeMillis()
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
-        s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
+            s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         var rddB = other.blocks
         //var useOtherMatrix: Boolean = false
         if (COLS_PER_BLK != other.ROWS_PER_BLK) {
             logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK " +
-              s"and B.row_per_blk = ${other.ROWS_PER_BLK}")
+                s"and B.row_per_blk = ${other.ROWS_PER_BLK}")
             rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
                 COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
             //useOtherMatrix = true
@@ -656,15 +658,15 @@ class BlockPartitionMatrix (
         val rdd1 = groupByCached
         /*println("Collecting skew info for column partition ...")
         val arr = blocks.map { case ((rowIdx, colIdx), mat) =>
-            var count = 0
-            mat match {
-                case dm: DenseMatrix => count = dm.values.length
-                case sp: SparseMatrix => count = sp.values.length
-                case _ => count = 0
-            }
+        var count = 0
+        mat match {
+            case dm: DenseMatrix => count = dm.values.length
+            case sp: SparseMatrix => count = sp.values.length
+            case _ => count = 0
+        }
             (colIdx, count)
         }.reduceByKey(_ + _)
-         .collect()
+        .collect()
         for ((x, c) <- arr) {
             println(s"colId = $x, count = $c")
         }*/
@@ -673,20 +675,21 @@ class BlockPartitionMatrix (
             (rowIdx, (colIdx, matB))
         }.groupByKey()
         val rddC = rdd1.join(rdd2)
-          .values
-          .flatMap{ case (iterA, iterB) =>
-            //val product = mutable.ArrayBuffer[((Int, Int), BM[Double])]()
-            val product = mutable.ArrayBuffer[((Int, Int), MLMatrix)]()
-            for (blk1 <- iterA) {
-                for (blk2 <- iterB) {
-                    val idx = (blk1._1, blk2._1)
-                    val c = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
-                    //product.append((idx, LocalMatrix.toBreeze(c)))
-                    product.append((idx, c))
+            .values
+            .flatMap{ case (iterA, iterB) =>
+                //val product = mutable.ArrayBuffer[((Int, Int), BM[Double])]()
+                val product = mutable.ArrayBuffer[((Int, Int), MLMatrix)]()
+                val arrB = iterB.toArray
+                for (blk1 <- iterA) {
+                    for (blk2 <- arrB) {
+                        val idx = (blk1._1, blk2._1)
+                        val c = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
+                        //product.append((idx, LocalMatrix.toBreeze(c)))
+                        product.append((idx, c))
+                    }
                 }
-            }
-            product
-        }.reduceByKey(LocalMatrix.add(_, _))
+                product
+            }.reduceByKey(LocalMatrix.add(_, _))
 
 
         /*  .combineByKey(
@@ -698,16 +701,16 @@ class BlockPartitionMatrix (
         val t2 = System.currentTimeMillis()
         println("Matrix multiplication takes: " + (t2-t1)/1000.0 + " sec")
         new BlockPartitionMatrix(rddC, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
-    }
+}
 
     // just for comparison purpose, not used in the multiplication code
     def multiplyDMAC(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
-          s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
+            s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         var rddB = other.blocks
         //var useOtherMatrix: Boolean = false
         if (COLS_PER_BLK != other.ROWS_PER_BLK) {
-            logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
+        logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
             rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
                 COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
             //useOtherMatrix = true
@@ -720,7 +723,7 @@ class BlockPartitionMatrix (
         val nodes = 8
 
         val aggregator = new Aggregator[(Int, Int), (MLMatrix, MLMatrix),
-          ArrayBuffer[(MLMatrix, MLMatrix)]](createCombiner, mergeValue, mergeCombiner)
+        ArrayBuffer[(MLMatrix, MLMatrix)]](createCombiner, mergeValue, mergeCombiner)
 
         val rdd1 = blocks.map{ case ((rowIdx, colIdx), matA) =>
             (colIdx % nodes, (colIdx, rowIdx, matA))
@@ -730,40 +733,40 @@ class BlockPartitionMatrix (
         }.groupByKey()
 
         val rddC = rdd1.join(rdd2)
-          .values.flatMap{ case (buf1, buf2) =>
-            val cross = new ArrayBuffer[((Int, Int), (MLMatrix, MLMatrix))]()
-            for (i <- buf1)
-                for (j <- buf2) {
-                    if (i._1 == j._1)
-                        cross.append(((i._2, j._2), (i._3, j._3)))
-                }
-            cross
-        }.mapPartitionsWithContext((context, iter) => {
-            new InterruptibleIterator(context, aggregator.combineValuesByKey(iter, context))
-        }, true).map { case (index, buf) =>
-            var re_block: MLMatrix = null
-            for ((blk1, blk2) <- buf) {
-                val mul = LocalMatrix.matrixMultiplication(blk1, blk2)
-                re_block match {
-                    case null => re_block = mul
-                    case _ => re_block = LocalMatrix.add(mul, re_block)
-                }
-            }
-            (index, re_block)
-        }.reduceByKey(LocalMatrix.add(_, _))
+                .values.flatMap{ case (buf1, buf2) =>
+                    val cross = new ArrayBuffer[((Int, Int), (MLMatrix, MLMatrix))]()
+                    for (i <- buf1)
+                        for (j <- buf2) {
+                            if (i._1 == j._1)
+                            cross.append(((i._2, j._2), (i._3, j._3)))
+                        }
+                    cross
+                }.mapPartitionsWithContext((context, iter) => {
+                    new InterruptibleIterator(context, aggregator.combineValuesByKey(iter, context))
+                }, true).map { case (index, buf) =>
+                    var re_block: MLMatrix = null
+                    for ((blk1, blk2) <- buf) {
+                        val mul = LocalMatrix.matrixMultiplication(blk1, blk2)
+                        re_block match {
+                            case null => re_block = mul
+                            case _ => re_block = LocalMatrix.add(mul, re_block)
+                        }
+                    }
+                    (index, re_block)
+                }.reduceByKey(LocalMatrix.add(_, _))
         new BlockPartitionMatrix(rddC, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }
 
-    def createCombiner (v: (MLMatrix, MLMatrix)) = ArrayBuffer(v)
+def createCombiner (v: (MLMatrix, MLMatrix)) = ArrayBuffer(v)
 
-    def mergeValue(cur: ArrayBuffer[(MLMatrix, MLMatrix)], v: (MLMatrix, MLMatrix)) = cur += v
+def mergeValue(cur: ArrayBuffer[(MLMatrix, MLMatrix)], v: (MLMatrix, MLMatrix)) = cur += v
 
-    def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMatrix, MLMatrix)]) = c1 ++ c2
+def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMatrix, MLMatrix)]) = c1 ++ c2
 
 
-    /*
-     * Compute top-k largest elements from the block partitioned matrix.
-     */
+/*
+ * Compute top-k largest elements from the block partitioned matrix.
+ */
     def topK(k: Int): Array[((Long, Long), Double)] = {
         val res = blocks.map { case ((rowIdx, colIdx), matrix) =>
             val pq = new mutable.PriorityQueue[((Int, Int), Double)]()(Ordering.by(orderByValueInt))
@@ -816,13 +819,13 @@ class BlockPartitionMatrix (
 
     def blockMultiplyDup(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
-          s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
+            s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         var rddB = other.blocks
         //var useOtherMatrix: Boolean = false
         if (COLS_PER_BLK != other.ROWS_PER_BLK) {
             logWarning(s"Repartition Matrix B since A.col_per_blk = $COLS_PER_BLK and B.row_per_blk = ${other.ROWS_PER_BLK}")
             rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
-                COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
+            COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
             //useOtherMatrix = true
         }
 
@@ -835,64 +838,63 @@ class BlockPartitionMatrix (
             Iterator((idx, iter.toIndexedSeq.iterator))
         }
         //println("mapPartitionsWithIndex: " + partRDD.count())
-        val prodRDD = partRDD
-          .join(otherDup)
-          .flatMap { case (pidx, (iter1, iter2)) =>
-            // aggregate local block matrices on each partition
-            val idxToMat = new TrieMap[(Int, Int), MLMatrix]()
-            val iter2Dup = iter2.toSeq
-            for (blk1 <- iter1) {
-                for (blk2 <- iter2Dup) {
-                    if (blk1._1._2 == blk2._1._1) {
-                        val key = (blk1._1._1, blk2._1._2)
-                        if (!idxToMat.contains(key)) {
-                            val prod = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
-                            idxToMat.putIfAbsent(key, prod)
-                        }
-                        else {
-                            val prod1 = idxToMat.get(key)
-                            val prod2 = LocalMatrix.add(prod1.get, LocalMatrix.matrixMultiplication(blk1._2, blk2._2))
-                            idxToMat.replace(key, prod2)
+        val prodRDD = partRDD.join(otherDup)
+                .flatMap { case (pidx, (iter1, iter2)) =>
+                    // aggregate local block matrices on each partition
+                    val idxToMat = new TrieMap[(Int, Int), MLMatrix]()
+                    val iter2Dup = iter2.toArray
+                    for (blk1 <- iter1) {
+                        for (blk2 <- iter2Dup) {
+                            if (blk1._1._2 == blk2._1._1) {
+                                val key = (blk1._1._1, blk2._1._2)
+                                if (!idxToMat.contains(key)) {
+                                    val prod = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
+                                    idxToMat.putIfAbsent(key, prod)
+                                }
+                                else {
+                                    val prod1 = idxToMat.get(key)
+                                    val prod2 = LocalMatrix.add(prod1.get, LocalMatrix.matrixMultiplication(blk1._2, blk2._2))
+                                    idxToMat.replace(key, prod2)
+                                }
+                            }
                         }
                     }
-                }
-            }
-            idxToMat.iterator
-        }.reduceByKey(resultPartitioner, LocalMatrix.add(_, _))
+                    idxToMat.iterator
+                }.reduceByKey(resultPartitioner, LocalMatrix.add(_, _))
         new BlockPartitionMatrix(prodRDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
     }
 
     def frobenius(): Double = {
         val t = blocks.map { case ((i, j), mat) =>
-            val x = LocalMatrix.frobenius(mat)
-            x * x
-        }.reduce(_ + _)
+                val x = LocalMatrix.frobenius(mat)
+                x * x
+            }.reduce(_ + _)
         math.sqrt(t)
     }
 
     def sumAlongRow(): BlockPartitionMatrix = { // one partition may contain multiple row blocks!!
         val rdd = blocks.map { case ((rowIdx, colIdx), mat) =>
-            val arr = Array.fill[Double](mat.numCols)(1.0)
-            val e = new DenseMatrix(mat.numCols, 1, arr)
-            val prod = LocalMatrix.matrixMultiplication(mat, e)
-            (rowIdx, prod)
-        }.reduceByKey(LocalMatrix.add(_, _))
-        .map { case (idx, mat) =>
-            val arr = mat.toArray
-            for (i <- 0 until arr.length) { // avoid divide by 0
-                if (arr(i) == 0.0) {
-                    arr(i) = 1.0
+                val arr = Array.fill[Double](mat.numCols)(1.0)
+                val e = new DenseMatrix(mat.numCols, 1, arr)
+                val prod = LocalMatrix.matrixMultiplication(mat, e)
+                (rowIdx, prod)
+            }.reduceByKey(LocalMatrix.add(_, _))
+            .map { case (idx, mat) =>
+                val arr = mat.toArray
+                for (i <- 0 until arr.length) { // avoid dividing by 0
+                    if (arr(i) == 0.0) {
+                        arr(i) = 1.0
+                    }
                 }
+                val dense = new DenseMatrix(mat.numRows, mat.numCols, arr)
+                ((idx, 0), dense.asInstanceOf[MLMatrix])
             }
-            val dense = new DenseMatrix(mat.numRows, mat.numCols, arr)
-            ((idx, 0), dense.asInstanceOf[MLMatrix])
-        }
         new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), 1L)
     }
 
-    //TODO: come up with a better sampling method,
-    //TODO: it is too BAD to collect each block info since we only need a small portion of them
-     // CHECK this implementation!!!
+//TODO: come up with a better sampling method,
+//TODO: it is too BAD to collect each block info since we only need a small portion of them
+// CHECK this implementation!!!
     def sample(ratio: Double) = {
         val sampleColNum: Int = math.max((ratio * COL_BLK_NUM).toInt, 1)
         val colStep: Int = COL_BLK_NUM / sampleColNum
@@ -900,20 +902,19 @@ class BlockPartitionMatrix (
         for (j <- 0 until sampleColNum)
             colSet += j*colStep
         val colNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
-            if (colSet.contains(colIdx)) {
-                val nnz = mat match {
-                    case den: DenseMatrix => den.values.length
-                    case sp: SparseMatrix => sp.values.length
+                if (colSet.contains(colIdx)) {
+                    val nnz = mat match {
+                        case den: DenseMatrix => den.values.length
+                        case sp: SparseMatrix => sp.values.length
+                    }
+                    (colIdx, nnz)
                 }
-                (colIdx, nnz)
-            }
-            else (colIdx, 0)
-        }.filter(x => x._2 != 0)
-         .reduceByKey(_ + _)
-         .collect()
+                else (colIdx, 0)
+             }.filter(x => x._2 != 0)
+              .reduceByKey(_ + _)
+              .collect()
         for (elem <- colNNZ) {
             colBlkMap(elem._1) = elem._2
-
         }
         val sampleRowNum: Int = math.max((ratio * ROW_BLK_NUM).toInt, 1)
         val rowStep: Int = ROW_BLK_NUM / sampleRowNum
@@ -921,17 +922,17 @@ class BlockPartitionMatrix (
         for (i <- 0 until sampleRowNum)
             rowSet += i * rowStep
         val rowNNZ = blocks.map { case ((rowIdx, colIdx), mat) =>
-            if (rowSet.contains(rowIdx)) {
-                val nnz = mat match {
-                    case den: DenseMatrix => den.values.length
-                    case sp: SparseMatrix => sp.values.length
-                }
-                (rowIdx, nnz)
-            }
-            else (rowIdx, 0)
-        }.filter(x => x._2 != 0)
-         .reduceByKey(_ + _)
-         .collect()
+                        if (rowSet.contains(rowIdx)) {
+                            val nnz = mat match {
+                                case den: DenseMatrix => den.values.length
+                                case sp: SparseMatrix => sp.values.length
+                            }
+                            (rowIdx, nnz)
+                        }
+                        else (rowIdx, 0)
+                    }.filter(x => x._2 != 0)
+                    .reduceByKey(_ + _)
+                    .collect()
         for (elem <- rowNNZ) {
             rowBlkMap(elem._1) = elem._2
         }
@@ -946,9 +947,9 @@ object BlockPartitionMatrix {
                                     ROW_NUM: Long = 0,
                                     COL_NUM: Long = 0): BlockPartitionMatrix = {
         require(ROWS_PER_BLK > 0, s"ROWS_PER_BLK needs to be greater than 0. " +
-        s"But found ROWS_PER_BLK = $ROWS_PER_BLK")
+          s"But found ROWS_PER_BLK = $ROWS_PER_BLK")
         require(COLS_PER_BLK > 0, s"COLS_PER_BLK needs to be greater than 0. " +
-        s"But found COLS_PER_BLK = $COLS_PER_BLK")
+          s"But found COLS_PER_BLK = $COLS_PER_BLK")
         var colSize = 0L
         if (COL_NUM > 0) {
             colSize = COL_NUM
@@ -995,25 +996,25 @@ object BlockPartitionMatrix {
                                             ROWS_PER_BLK: Int,
                                             COLS_PER_BLK: Int): BlockPartitionMatrix = {
         require(ROWS_PER_BLK > 0, s"ROWS_PER_BLK needs to be greater than 0. " +
-        s"But found ROWS_PER_BLK = $ROWS_PER_BLK")
+          s"But found ROWS_PER_BLK = $ROWS_PER_BLK")
         require(COLS_PER_BLK > 0, s"COLS_PER_BLK needs to be greater than 0. " +
-        s"But found COLS_PER_BLK = $COLS_PER_BLK")
+          s"But found COLS_PER_BLK = $COLS_PER_BLK")
         val rowSize = entries.map(x => x.row).max() + 1
         val colSize = entries.map(x => x.col).max() + 1
         val size = math.max(rowSize, colSize)   // make sure the generating matrix is a square matrix
         val wRdd = entries.map(entry => (entry.row, entry))
-        .groupByKey().map { x =>
-            (x._1, 1.0 / x._2.size)
-        }
+              .groupByKey().map { x =>
+                (x._1, 1.0 / x._2.size)
+            }
         val prEntries = entries.map { entry =>
             (entry.row, entry)
         }.join(wRdd)
-        .map { record =>
-            val rid = record._2._1.col
-            val cid = record._2._1.row
-            val v = record._2._1.value * record._2._2
-            Entry(rid, cid, v)
-        }
+          .map { record =>
+              val rid = record._2._1.col
+              val cid = record._2._1.row
+              val v = record._2._1.value * record._2._2
+              Entry(rid, cid, v)
+          }
         createFromCoordinateEntries(prEntries, ROWS_PER_BLK, COLS_PER_BLK, size, size)
     }
 
@@ -1106,19 +1107,30 @@ object TestBlockPartition {
         val x2 = new DenseMatrix(3,1,Array[Double](4,5,6))
         val y1 = new DenseMatrix(1,3,Array[Double](1,2,3))
         val y2 = new DenseMatrix(1,3,Array[Double](4,5,6))
+        val o1 = new DenseMatrix(2,2,Array[Double](1,1,1,1))
+        val o2 = new DenseMatrix(2,2,Array[Double](2,2,2,2))
+        val o3 = new DenseMatrix(2,2,Array[Double](3,3,3,3))
+        val o4 = new DenseMatrix(2,2,Array[Double](4,4,4,4))
+        val o5 = new DenseMatrix(2,2,Array[Double](5,5,5,5))
         val arr1 = Array[((Int, Int), MLMatrix)](((0,0),m1), ((0,1), m2), ((1,0), m3), ((1,1), m4))
         val arr2 = Array[((Int, Int), MLMatrix)](((0,0),n1), ((0,1), n2), ((1,0), n3), ((1,1), n4))
         val arrx = Array[((Int, Int), MLMatrix)](((0,0),x1), ((1,0),x2))
         val arry = Array[((Int, Int), MLMatrix)](((0,0),y1), ((0,1),y2))
+        val arro1 = Array[((Int, Int), MLMatrix)](((0,0),o1))
+        val arro2 = Array[((Int, Int), MLMatrix)](((0,0),o2), ((0,1),o3), ((0,2),o4), ((0,3),o5))
         val rdd1 = sc.parallelize(arr1, 2)
         val rdd2 = sc.parallelize(arr2, 2)
         val rddx = sc.parallelize(arrx, 2)
         val rddy = sc.parallelize(arry, 2)
+        val rddo1 = sc.parallelize(arro1, 2)
+        val rddo2 = sc.parallelize(arro2, 2)
         val mat1 = new BlockPartitionMatrix(rdd1, 3, 3, 6, 6)
         val mat2 = new BlockPartitionMatrix(rdd2, 4, 4, 6, 6)
         val matx = new BlockPartitionMatrix(rddx, 3,3,6,1)
         val maty = new BlockPartitionMatrix(rddy, 3,3,1,6)
-        mat1.partitionByBlockCyclic()
+        val mato1 = new BlockPartitionMatrix(rddo1, 2, 2, 2, 2)
+        val mato2 = new BlockPartitionMatrix(rddo2, 2, 2, 2, 8)
+        //mat1.partitionByBlockCyclic()
         //println((mat1 + mat2).toLocalMatrix())
         /*  addition
          *  2.0   3.0   4.0   6.0   7.0   8.0
@@ -1137,7 +1149,8 @@ object TestBlockPartition {
              339   339   339   504   504   504
              411   411   411   612   612   612
          */
-        println((matx %*% maty).toLocalMatrix())
+        //println((matx %*% maty).toLocalMatrix())
+        println((mato1 %*% mato2).toLocalMatrix())
 
         /*val mat = List[(Long, Long)]((0, 0), (0,1), (0,2), (0,3), (0, 4), (0, 5), (1, 0), (1, 2),
             (2, 3), (2, 4), (3,1), (3,2), (3, 4), (4, 5), (5, 4))

@@ -14,7 +14,7 @@ object EQTL {
       println("Usage: geno_matrix m1 n1 mrna_matrix m2 n2")
       System.exit(1)
     }
-    val hdfs = "hdfs://openstack-vm-11-143.rcac.purdue.edu:8022/user/yu163/"//"hdfs://10.100.121.126:8022/"//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
+    val hdfs = "hdfs://10.100.121.126:8022/"//"hdfs://openstack-vm-11-143.rcac.purdue.edu:8022/user/yu163/"//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
     val matrixName1 = hdfs + args(0)
     val (m1, n1) = (args(1).toLong, args(2).toLong)
     val matrixName2 = hdfs + args(3)
@@ -24,7 +24,7 @@ object EQTL {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "30")
+      .set("spark.cores.max", "64")
       .set("spark.executor.memory", "6g")
       //.set("spark.default.parallelism", "64")
       .set("spark.akka.frameSize", "64")
@@ -64,6 +64,9 @@ object EQTL {
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
         N(i) = I(i).sumAlongRow()
+        val arr = N(i).blocks.collect().filter(x => x._1 == (13,0))
+        //println(s"N($i) block id = ${arr(0)._1}")
+        //println(s"N($i) = ${arr(0)._2}")
         /*val tmp = N(i).blocks.filter(x => x._1 == (1,0)).collect()
         if (tmp.length > 0) {
           println(s"key = ${tmp(0)._1}")
@@ -89,6 +92,9 @@ object EQTL {
     for (i <- 0 until Si.length) {
         Si(i) = (mrnaRank %*% I(i).t) ^ 2.0//mrnaRank %*% (I(i).t)
         println(s"Si($i) number of partitions: " + Si(i).blocks.partitions.length)
+        //val arr = Si(i).blocks.filter(x => x._1 == (0,13)).collect()
+        //println(s"Si($i) block id = ${arr(0)._1}")
+        //println(s"block = ${arr(0)._2}")
         /*println(s"Si($i) blocks: ")
         val arr = Si(i).blocks.map { case ((i, j), mat) =>
             val num = mat match {
@@ -106,6 +112,9 @@ object EQTL {
     val KK = geno.nCols()
     println(s"KK = $KK")
     var S = Si(0).divideVector(N(0))//(Si(0) ^ 2.0).divideVector(N(0))
+    //val arrs = S.blocks.filter(x => x._1 == (0,13)).collect()
+    //println(s"S blk id = ${arrs(0)._1}")
+    //println(s"S blk = ${arrs(0)._2}")
     //println(S.toLocalMatrix())
     println(s"S number of partitions: " + S.blocks.partitions.length)
     println("finish generating initial S ...")
@@ -114,6 +123,9 @@ object EQTL {
             println(s"i=$i" + "*"*20)
             //println(s"N($i).nnz = " + N(i).nnz)
             S = S + Si(i).divideVector(N(i))//S + (Si(i) ^ 2.0).divideVector(N(i))
+            //val arr = S.blocks.filter(x => x._1 == (0,13)).collect()
+            //println(s"S blk id = ${arr(0)._1}")
+            //println(s"S blk = ${arr(0)._2}")
             println(s"S number of partitions: " + S.blocks.partitions.length)
             //println(S.toLocalMatrix())
             /*println("S blocks")

@@ -33,7 +33,7 @@ object EQTL {
     val MrnaRDD = genMrnaRDD(sc, matrixName2)
     val mrnaSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m2, n2)
     val mrnaRank = BlockPartitionMatrix.createFromCoordinateEntries(MrnaRDD, mrnaSize, mrnaSize, m2, n2)
-    val numPartitions = conf.getInt("spark.executor.instances", 24)
+    val numPartitions = conf.getInt("spark.executor.instances", 10)
     //println(s"numPartitions = $numPartitions")
     mrnaRank.repartition(numPartitions)
     //println("mrnaRank")
@@ -64,7 +64,7 @@ object EQTL {
     val N = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until N.length) {
         N(i) = I(i).sumAlongRow()
-        val arr = N(i).blocks.collect().filter(x => x._1 == (13,0))
+        //val arr = N(i).blocks.collect().filter(x => x._1 == (13,0))
         //println(s"N($i) block id = ${arr(0)._1}")
         //println(s"N($i) = ${arr(0)._2}")
         /*val tmp = N(i).blocks.filter(x => x._1 == (1,0)).collect()

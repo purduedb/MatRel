@@ -54,7 +54,7 @@ class BlockPartitionMatrix (
         //println("computing nnz ...")
         val cnt = blocks.map{ case ((i, j), mat) =>
             mat match {
-              case den: DenseMatrix => den.values.filter(x => x != 0).length
+              case den: DenseMatrix => den.values.length.toLong
               case sp: SparseMatrix => sp.values.length.toLong
               case _ => 0L
             }
@@ -1044,9 +1044,9 @@ object BlockPartitionMatrix {
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
-        blkSize = blkSize - (blkSize % 1000)
+        blkSize = blkSize - (blkSize % 5000)
         if (blkSize == 0) {
-            1000
+            5000
         }
         else {
             blkSize
@@ -1061,9 +1061,9 @@ object BlockPartitionMatrix {
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
-        blkSize = blkSize - (blkSize % 1000)
+        blkSize = blkSize - (blkSize % 5000)
         if (blkSize == 0) {
-            1000
+            5000
         }
         else {
             blkSize
@@ -1082,6 +1082,77 @@ object BlockPartitionMatrix {
             ((i, j), matrix)
         }
         new BlockPartitionMatrix(RDD, blkMat.ROWS_PER_BLK, blkMat.COLS_PER_BLK, 1, blkMat.nCols()).t
+    }
+
+    // need RDD source and proper size of the blocks
+    def createDenseBlockMatrix(sc: SparkContext,
+                               name: String,
+                               ROWS_PER_BLOCK: Int,
+                               COLS_PER_BLOCK: Int,
+                               nrows: Long,
+                               ncols: Long): BlockPartitionMatrix = {
+        val lines = sc.textFile(name, 16)
+        val colNum = lines.map{ line =>
+            line.split("\t").length
+        }.first()
+        require(ncols == colNum, s"Error creating dense block matrices, meta data ncols = $ncols, " +
+        s"actual colNum = $colNum")
+        val RDD = lines.map { line =>
+            if (line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
+                (-1, (-1.toLong, line.toString))
+            }
+            else {
+                val rowId = line.split("\t")(0).toLong - 1
+                ((rowId / ROWS_PER_BLOCK).toInt, (rowId.toLong, line.substring((rowId+1).toString.length + 1)))
+            }
+        }.filter(x => x._1 >= 0)
+         .groupByKey()
+         .flatMap { case (rowBlkId, iter) =>
+             // each row should have math.ceil(colNum / COLS_PER_BLOCK)
+             val numColBlks = math.ceil(colNum * 1.0/ COLS_PER_BLOCK).toInt
+             //val arrs = Array.ofDim[Double](numColBlks, ROWS_PER_BLOCK * COLS_PER_BLOCK)
+             val arrs = Array.ofDim[Array[Double]](numColBlks)
+             var currRow = 0
+             if (rowBlkId == nrows / ROWS_PER_BLOCK) {
+                 currRow = (nrows - ROWS_PER_BLOCK * rowBlkId).toInt
+             }
+             else {
+                 currRow = ROWS_PER_BLOCK
+             }
+             for (j <- 0 until arrs.length) {
+                 if (j == ncols / COLS_PER_BLOCK) {
+                     arrs(j) = Array.ofDim[Double]((currRow * (ncols - ncols / COLS_PER_BLOCK * COLS_PER_BLOCK)).toInt)
+                 }
+                 else {
+                     arrs(j) = Array.ofDim[Double](currRow * COLS_PER_BLOCK)
+                 }
+             }
+             for (row <- iter) {
+                 val rowId = row._1
+                 val strs = row._2.split("\t")
+                 for (j <- 0 until strs.length) {
+                    val value = strs(j).toDouble
+                    val colBlkId = j / COLS_PER_BLOCK
+                    val localRowId = rowId - rowBlkId * ROWS_PER_BLOCK
+                    val localColId = j - colBlkId * COLS_PER_BLOCK
+                    val idx = currRow * localColId + localRowId
+                    arrs(colBlkId)(idx.toInt) = value
+                 }
+             }
+             val buffer = ArrayBuffer[((Int, Int), MLMatrix)]()
+             for (j <- 0 until arrs.length) {
+                 if (j == ncols / COLS_PER_BLOCK) {
+                     buffer.append(((rowBlkId.toInt, j),
+                       new DenseMatrix(currRow, (ncols - ncols / COLS_PER_BLOCK * COLS_PER_BLOCK).toInt, arrs(j))))
+                 }
+                 else {
+                     buffer.append(((rowBlkId.toInt, j),
+                       new DenseMatrix(currRow, COLS_PER_BLOCK, arrs(j))))
+                 }
+             }
+             buffer
+         }
+        new BlockPartitionMatrix(RDD, ROWS_PER_BLOCK, COLS_PER_BLOCK, nrows, ncols)
     }
 }
 
@@ -1152,6 +1223,9 @@ object TestBlockPartition {
         //println((matx %*% maty).toLocalMatrix())
         println((mato1 %*% mato2).toLocalMatrix())
 
+        val denseBlkMat = BlockPartitionMatrix.createDenseBlockMatrix(sc,
+            "/Users/yongyangyu/Desktop/krux-master-dev/test/mrna.tab.tmp", 3,6,10,10)
+        println(denseBlkMat.toLocalMatrix())
         /*val mat = List[(Long, Long)]((0, 0), (0,1), (0,2), (0,3), (0, 4), (0, 5), (1, 0), (1, 2),
             (2, 3), (2, 4), (3,1), (3,2), (3, 4), (4, 5), (5, 4))
         val CooRdd = sc.parallelize(mat, 2).map(x => Entry(x._1, x._2, 1.0))

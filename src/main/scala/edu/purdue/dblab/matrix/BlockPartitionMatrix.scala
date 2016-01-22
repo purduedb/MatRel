@@ -1084,13 +1084,22 @@ object BlockPartitionMatrix {
         new BlockPartitionMatrix(RDD, blkMat.ROWS_PER_BLK, blkMat.COLS_PER_BLK, 1, blkMat.nCols()).t
     }
 
+    private def defaultRead(line: String): Array[Double] = {
+        val elems = line.split("\t")
+        val res = new Array[Double](elems.length)
+        for (i <- 0 until res.length) {
+            res(i) = elems(i).toDouble
+        }
+        res
+    }
     // need RDD source and proper size of the blocks
     def createDenseBlockMatrix(sc: SparkContext,
                                name: String,
                                ROWS_PER_BLOCK: Int,
                                COLS_PER_BLOCK: Int,
                                nrows: Long,
-                               ncols: Long): BlockPartitionMatrix = {
+                               ncols: Long,
+                               procLine: String => Array[Double] = defaultRead): BlockPartitionMatrix = {
         val lines = sc.textFile(name, 16)
         val colNum = lines.map{ line =>
             line.split("\t").length
@@ -1098,10 +1107,12 @@ object BlockPartitionMatrix {
         require(ncols == colNum, s"Error creating dense block matrices, meta data ncols = $ncols, " +
         s"actual colNum = $colNum")
         val RDD = lines.map { line =>
-            if (line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
+            // comment line or title line
+            if (line.contains("#") || line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
                 (-1, (-1.toLong, line.toString))
             }
             else {
+                // here consider tab separated elements in a line
                 val rowId = line.split("\t")(0).toLong - 1
                 ((rowId / ROWS_PER_BLOCK).toInt, (rowId.toLong, line.substring((rowId+1).toString.length + 1)))
             }
@@ -1110,7 +1121,7 @@ object BlockPartitionMatrix {
          .flatMap { case (rowBlkId, iter) =>
              // each row should have math.ceil(colNum / COLS_PER_BLOCK)
              val numColBlks = math.ceil(colNum * 1.0/ COLS_PER_BLOCK).toInt
-             //val arrs = Array.ofDim[Double](numColBlks, ROWS_PER_BLOCK * COLS_PER_BLOCK)
+             // each one of the 2d array may have different lengths according to the key
              val arrs = Array.ofDim[Array[Double]](numColBlks)
              var currRow = 0
              if (rowBlkId == nrows / ROWS_PER_BLOCK) {
@@ -1129,14 +1140,13 @@ object BlockPartitionMatrix {
              }
              for (row <- iter) {
                  val rowId = row._1
-                 val strs = row._2.split("\t")
-                 for (j <- 0 until strs.length) {
-                    val value = strs(j).toDouble
+                 val values = procLine(row._2)
+                 for (j <- 0 until values.length) {
                     val colBlkId = j / COLS_PER_BLOCK
                     val localRowId = rowId - rowBlkId * ROWS_PER_BLOCK
                     val localColId = j - colBlkId * COLS_PER_BLOCK
                     val idx = currRow * localColId + localRowId
-                    arrs(colBlkId)(idx.toInt) = value
+                    arrs(colBlkId)(idx.toInt) = values(j)
                  }
              }
              val buffer = ArrayBuffer[((Int, Int), MLMatrix)]()

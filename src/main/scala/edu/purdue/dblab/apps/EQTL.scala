@@ -30,19 +30,18 @@ object EQTL {
       .set("spark.akka.frameSize", "64")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
-    val MrnaRDD = genMrnaRDD(sc, matrixName2)
     val mrnaSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m2, n2)
-    val mrnaRank = BlockPartitionMatrix.createFromCoordinateEntries(MrnaRDD, mrnaSize, mrnaSize, m2, n2)
+    val mrnaRank = BlockPartitionMatrix.createDenseBlockMatrix(sc, matrixName2, mrnaSize, mrnaSize,
+      m2, n2, RankData.rankWithNoMissing)
     val numPartitions = conf.getInt("spark.executor.instances", 16)
     //println(s"numPartitions = $numPartitions")
     mrnaRank.repartition(numPartitions)
     //println("mrnaRank")
     //println(mrnaRank.toLocalMatrix())
-    val genoRDD = genGenoRDD(sc, matrixName1)
     //val genoSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m1, n1)
     // try using the same block size for mrna matrix and geno matrix to avoid reblocking cost
-    val geno = BlockPartitionMatrix.createFromCoordinateEntries(genoRDD, mrnaSize, mrnaSize, m1, n1)
-    geno.repartition(numPartitions)
+    val geno = BlockPartitionMatrix.createDenseBlockMatrix(sc, matrixName1, mrnaSize, mrnaSize,
+      m1, n1, genoLine)
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
         println(s"I($i) blocks: ")
@@ -160,49 +159,16 @@ object EQTL {
       new BlockPartitionMatrix(RDD, geno.ROWS_PER_BLK, geno.COLS_PER_BLK, geno.nRows(), geno.nCols())
   }
 
-  def genMrnaRDD(sc: SparkContext, name: String): RDD[Entry] = {
-      val lines = sc.textFile(name, 8)
-      lines.map { line =>
-          if (line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
-              Array(Entry(-1, -1, -1))
+  def genoLine(line: String): Array[Double] = {
+      val elems = line.split("\t")
+      val res = new Array[Double](elems.length)
+      for (i <- 0 until res.length) {
+          if (elems(i).equals("NaN") || elems(i).toInt == -1) {
+            // for NaN and missing data, always assign it to 0
+            // maybe better solutions exist but we do not care about right now
+              res(i) = 0
           }
-          else {
-              val row = line.split("\t")(0).toLong - 1
-              val res = RankData.rankWithNoMissing(line)
-              val arr = new Array[Entry](res.length)
-              for (j <- 0 until arr.length) {
-                  arr(j) = Entry(row, j, res(j))
-              }
-              arr
-          }
-      }.flatMap(x => x)
-      .filter(x => x.row >= 0)
-  }
-
-  def genGenoRDD(sc: SparkContext, name: String): RDD[Entry] = {
-      val lines = sc.textFile(name, 8)
-      lines.map { line =>
-          if (line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
-              Array(Entry(-1, -1, -1))
-          }
-          else {
-              val strArr = line.split("\t")
-              val row = strArr(0).toLong - 1
-              val arr = new Array[Entry](strArr.length-1)
-              for (j <- 0 until arr.length) {
-                  if (strArr(j+1).equals("NaN") || strArr(j+1).toInt == -1) {
-                      // randomly assign for missing data
-                      //arr(j) = Entry(row, j, Random.nextInt(3))
-                      // always assign missing data to 0, maybe better than randomly assigning
-                      arr(j) = Entry(row, j, 0)
-                  }
-                  else {
-                      arr(j) = Entry(row, j, strArr(j + 1).toDouble)
-                  }
-              }
-            arr
-          }
-      }.flatMap(x => x)
-      .filter(x => x.row >= 0)
+      }
+      res
   }
 }

@@ -986,14 +986,15 @@ object LocalMatrix {
                 val values = den.toArray
                 var nnz = 0L
                 for (i <- 0 until values.length) {
-                    if (values(i) == v) {
-                        values(i) == 1
+                    if (math.abs(v - values(i)) < 1e-6) {
+                        values(i) = 1
                         nnz += 1
                     }
                     else {
                         values(i) = 0
                     }
                 }
+                println(values.mkString("[", ",", "]"))
                 if (nnz > 0.1 * den.numRows * den.numCols) {
                     new DenseMatrix(mat.numRows, mat.numCols, values)
                 }
@@ -1004,7 +1005,7 @@ object LocalMatrix {
                 val values = sp.toArray
                 var nnz = 0L
                 for (i <- 0 until values.length) {
-                    if (values(i) == v) {
+                    if (math.abs(v - values(i)) < 1e-6) {
                         values(i) = 1
                         nnz += 1
                     }

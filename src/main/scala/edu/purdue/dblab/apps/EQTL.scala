@@ -168,6 +168,9 @@ object EQTL {
             // maybe better solutions exist but we do not care about right now
               res(i) = 0
           }
+          else {
+            res(i) = elems(i).toDouble
+          }
       }
       res
   }

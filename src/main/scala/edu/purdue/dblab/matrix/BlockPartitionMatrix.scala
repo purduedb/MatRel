@@ -1102,7 +1102,7 @@ object BlockPartitionMatrix {
                                procLine: String => Array[Double] = defaultRead): BlockPartitionMatrix = {
         val lines = sc.textFile(name, 16)
         val colNum = lines.map{ line =>
-            line.split("\t").length
+            line.trim().split("\t").length
         }.first()
         require(ncols == colNum, s"Error creating dense block matrices, meta data ncols = $ncols, " +
         s"actual colNum = $colNum")
@@ -1113,7 +1113,7 @@ object BlockPartitionMatrix {
             }
             else {
                 // here consider tab separated elements in a line
-                val rowId = line.split("\t")(0).toLong - 1
+                val rowId = line.trim().split("\t")(0).toLong - 1
                 ((rowId / ROWS_PER_BLOCK).toInt, (rowId.toLong, line.substring((rowId+1).toString.length + 1)))
             }
         }.filter(x => x._1 >= 0)

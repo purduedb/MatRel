@@ -994,7 +994,7 @@ object LocalMatrix {
                         values(i) = 0
                     }
                 }
-                println(values.mkString("[", ",", "]"))
+                //println(values.mkString("[", ",", "]"))
                 if (nnz > 0.1 * den.numRows * den.numCols) {
                     new DenseMatrix(mat.numRows, mat.numCols, values)
                 }

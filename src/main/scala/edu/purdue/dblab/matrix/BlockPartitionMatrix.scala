@@ -274,7 +274,22 @@ class BlockPartitionMatrix (
     def divideVector(vec: BlockPartitionMatrix): BlockPartitionMatrix = {
         require(nCols() == vec.nRows(), s"Dimension incompatible matrix.ncols=${nCols()}, " +
           s"vec.nrows=${vec.nRows()}")
-        val RDD1 = blocks.map { case ((i, j), mat) =>
+        // duplicate vec to each partition of current matrix, instead of joining two RDDs
+        val ndup = blocks.partitions.length
+        val dupRDD = duplicateCrossPartitions(vec.blocks, ndup)
+        val RDD = dupRDD.zipPartitions(blocks, preservesPartitioning = true) { (iter1, iter2) =>
+            val buffer = new ArrayBuffer[MatrixBlk]()
+            val dup = iter1.next()._2
+            for (x <- iter2; div <- dup) {
+                if (x._1._2 == div._1._1) {
+                    val v = LocalMatrix.matrixDivideVector(x._2, div._2)
+                    buffer.append((x._1, v))
+                }
+            }
+            buffer.iterator
+        }
+        //println(RDD.map{ case ((i, j), v) => (i, j)}.collect().mkString("[", ",", "]"))
+        /*val RDD1 = blocks.map { case ((i, j), mat) =>
             (j, ((i,j), mat))
         }
         val RDD2 = vec.blocks.map { case ((i, j), mat) =>
@@ -282,7 +297,7 @@ class BlockPartitionMatrix (
         }
         val RDD = RDD1.join(RDD2).map { case (idx, (((i, j), mat1), mat2)) =>
             ((i, j), LocalMatrix.matrixDivideVector(mat1, mat2))
-        }
+        }*/
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
     }
 
@@ -584,48 +599,26 @@ class BlockPartitionMatrix (
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
           s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         // For eQTL use-cases, size(A) < size(B), should broadcast A
-        val numPartitions = other.blocks.partitions.size
-        println(s"#partitions = $numPartitions")
+        val numPartitions = other.blocks.partitions.length
         other.partitionBy(new ColumnPartitioner(numPartitions))
-        // broadcast the smaller matrix to each block of the large matrix
+        // broadcast the smaller matrix to each partition of the larger matrix
+        /*val num = blocks.count()
+        println(s"this.blocks.number = $num")
+        val numOther = other.blocks.count()
+        println(s"other.blocks.number = $numOther")*/
         val dupRDD = duplicateCrossPartitions(blocks, numPartitions)
-                    .map(elem => ((elem._1, elem._1), elem._2))
-                    .partitionBy(new ColumnPartitioner(numPartitions))
 
         val RDD = dupRDD.zipPartitions(other.blocks, preservesPartitioning = true) { (iter1, iter2) =>
-                val buffer = new ArrayBuffer[MatrixBlk]()
-                val buffer1 = new ArrayBuffer[MatrixBlk]()
-                for (blkIter <- iter1) {
-                    val blk = blkIter._2
-                    buffer1.appendAll(blk)
-                }
-                for (elem <- iter2) {
-                    val colId = elem._1._2
-                    val mat = elem._2
-                    for (e <- buffer1) {
-                        val rowId = e._1._1
-                        val v = LocalMatrix.matrixMultiplication(e._2, mat)
-                        buffer.append(((rowId, colId), v))
-                    }
-                }
-                buffer.iterator
-        }
-/*val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
             val buffer = new ArrayBuffer[MatrixBlk]()
-            for (elem <- iter1) {
-                val rowId = elem._1._1
-                val mat = elem._2
-                for (rowBlk <- iter2) {
-                    val blks = rowBlk._2
-                    for (e <- blks) {
-                        val colId = e._1._2
-                        val v = LocalMatrix.matrixMultiplication(mat, e._2)
-                        buffer.append(((rowId, colId), v))
-                    }
-                }
+            val dup = iter1.next()._2
+            for (x2 <- iter2; x1 <- dup) {
+                val blkIdx = (x1._1._1, x2._1._2)
+                val v = LocalMatrix.matrixMultiplication(x1._2, x2._2)
+                buffer.append((blkIdx, v))
             }
             buffer.iterator
-        }*/
+        }
+
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
 }
 
@@ -679,14 +672,11 @@ class BlockPartitionMatrix (
             .flatMap{ case (iterA, iterB) =>
                 //val product = mutable.ArrayBuffer[((Int, Int), BM[Double])]()
                 val product = mutable.ArrayBuffer[((Int, Int), MLMatrix)]()
-                val arrB = iterB.toArray
-                for (blk1 <- iterA) {
-                    for (blk2 <- arrB) {
-                        val idx = (blk1._1, blk2._1)
-                        val c = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
-                        //product.append((idx, LocalMatrix.toBreeze(c)))
-                        product.append((idx, c))
-                    }
+                for (blk1 <- iterA; blk2 <- iterB) {
+                    val idx = (blk1._1, blk2._1)
+                    val c = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
+                    //product.append((idx, LocalMatrix.toBreeze(c)))
+                    product.append((idx, c))
                 }
                 product
             }.reduceByKey(LocalMatrix.add(_, _))
@@ -806,7 +796,7 @@ def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMa
     }
 
     // duplicate the matrix for parNum copies and distribute them over the cluster
-    private def duplicateCrossPartitions(rdd: RDD[MatrixBlk], parNum: Int): RDD[(Int, Iterator[MatrixBlk])] = {
+    private def duplicateCrossPartitions(rdd: RDD[MatrixBlk], parNum: Int): RDD[(Int, Iterable[MatrixBlk])] = {
         rdd.flatMap{ case ((row, col), mat) =>
             val arr = new Array[(Int, MatrixBlk)](parNum)
             for (i <- 0 until parNum) {
@@ -814,7 +804,7 @@ def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMa
             }
             arr
         }.groupByKey(new IndexPartitioner(parNum))
-        .mapValues(iter => iter.toIterator)
+        //.mapValues(iter => iter.toIterator)
     }
 
     def blockMultiplyDup(other: BlockPartitionMatrix): BlockPartitionMatrix = {
@@ -873,22 +863,31 @@ def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMa
     }
 
     def sumAlongRow(): BlockPartitionMatrix = { // one partition may contain multiple row blocks!!
-        val rdd = blocks.map { case ((rowIdx, colIdx), mat) =>
-                val arr = Array.fill[Double](mat.numCols)(1.0)
-                val e = new DenseMatrix(mat.numCols, 1, arr)
-                val prod = LocalMatrix.matrixMultiplication(mat, e)
-                (rowIdx, prod)
-            }.reduceByKey(LocalMatrix.add(_, _))
-            .map { case (idx, mat) =>
-                val arr = mat.toArray
-                for (i <- 0 until arr.length) { // avoid dividing by 0
-                    if (arr(i) == 0.0) {
-                        arr(i) = 1.0
+        val rdd = blocks.map{ case ((rowIdx, colIdx), mat) =>
+            val matrix = mat match {
+                case den: DenseMatrix =>
+                    val arr = new Array[Double](den.numRows)
+                    val m = den.numRows
+                    val values = den.values
+                    for (i <- 0 until values.length) {
+                        arr(i % m) += values(i)
                     }
-                }
-                val dense = new DenseMatrix(mat.numRows, mat.numCols, arr)
-                ((idx, 0), dense.asInstanceOf[MLMatrix])
+                    new DenseMatrix(m, 1, arr)
+                case sp: SparseMatrix =>
+                    val arr = new Array[Double](sp.numRows)
+                    val m = sp.numRows
+                    val values = sp.toArray
+                    for (i <- 0 until values.length) {
+                        arr(i % m) += values(i)
+                    }
+                    new DenseMatrix(m, 1, arr)
+                case _ => throw new SparkException("Undefined matrix type in sumAlongRow()")
             }
+            (rowIdx, matrix.asInstanceOf[MLMatrix])
+        }.reduceByKey(LocalMatrix.add(_, _))
+         .map {case (rowIdx, mat) =>
+             ((rowIdx, 0), mat)
+         }
         new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), 1L)
     }
 
@@ -1044,9 +1043,9 @@ object BlockPartitionMatrix {
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
-        blkSize = blkSize - (blkSize % 5000)
+        blkSize = blkSize - (blkSize % 1000)
         if (blkSize == 0) {
-            5000
+            1000
         }
         else {
             blkSize
@@ -1061,9 +1060,9 @@ object BlockPartitionMatrix {
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
-        blkSize = blkSize - (blkSize % 5000)
+        blkSize = blkSize - (blkSize % 1000)
         if (blkSize == 0) {
-            5000
+            1000
         }
         else {
             blkSize
@@ -1099,14 +1098,15 @@ object BlockPartitionMatrix {
                                COLS_PER_BLOCK: Int,
                                nrows: Long,
                                ncols: Long,
+                               npart: Int = 8,  // number of partitions from Hadoop
                                procLine: String => Array[Double] = defaultRead): BlockPartitionMatrix = {
-        val lines = sc.textFile(name, 16)
+        val lines = sc.textFile(name, npart)
         val colNum = lines.map{ line =>
             line.trim().split("\t").length
         }.first()
         require(ncols == colNum, s"Error creating dense block matrices, meta data ncols = $ncols, " +
         s"actual colNum = $colNum")
-        val RDD = lines.map { line =>
+        val RDD0 = lines.map { line =>
             // comment line or title line
             if (line.contains("#") || line.contains("Sample") || line.contains("HG") || line.contains("NA")) {
                 (-1, (-1.toLong, line.toString))
@@ -1114,10 +1114,13 @@ object BlockPartitionMatrix {
             else {
                 // here consider tab separated elements in a line
                 val rowId = line.trim().split("\t")(0).toLong - 1
-                ((rowId / ROWS_PER_BLOCK).toInt, (rowId.toLong, line.substring((rowId+1).toString.length + 1)))
+                ((rowId / ROWS_PER_BLOCK).toInt, (rowId.toLong, line.trim().substring((rowId+1).toString.length + 1)))
             }
         }.filter(x => x._1 >= 0)
-         .groupByKey()
+        val rowNum = RDD0.count()
+        require(nrows == rowNum, s"Error creating dense block matrices, meta data nrows = $nrows, " +
+        s"actual rowNum = $rowNum")
+         val RDD = RDD0.groupByKey()
          .flatMap { case (rowBlkId, iter) =>
              // each row should have math.ceil(colNum / COLS_PER_BLOCK)
              val numColBlks = math.ceil(colNum * 1.0/ COLS_PER_BLOCK).toInt

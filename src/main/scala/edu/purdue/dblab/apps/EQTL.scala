@@ -69,10 +69,10 @@ object EQTL {
     println("finish computing Si ...")
     val KK = geno.nCols()
     println(s"KK = $KK")
-    var S = Si(0).divideVector(N(0))//(Si(0) ^ 2.0).divideVector(N(0))
+    var S = BlockPartitionMatrix.zeros()//Si(0).divideVector(N(0))//(Si(0) ^ 2.0).divideVector(N(0))
     println(s"S number of partitions: " + S.blocks.partitions.length)
     println("finish generating initial S ...")
-    for (i <- 1 until 3) {
+    for (i <- 0 until 3) {
         //if (N(i).nnz() != 0) {
             println(s"i=$i" + "*"*20)
             //println(s"N($i).nnz = " + N(i).nnz)

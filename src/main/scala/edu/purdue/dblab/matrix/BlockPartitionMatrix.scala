@@ -17,10 +17,10 @@ import scala.collection.mutable.{ArrayBuffer, Map => MMap}
  */
 class BlockPartitionMatrix (
     var blocks: RDD[((Int, Int), MLMatrix)],
-    val ROWS_PER_BLK: Int,
-    val COLS_PER_BLK: Int,
-    private var nrows: Long,
-    private var ncols: Long) extends Matrix with Logging {
+    val ROWS_PER_BLK: Int = 1,
+    val COLS_PER_BLK: Int = 1,
+    private var nrows: Long = 0,
+    private var ncols: Long = 0) extends Matrix with Logging {
 
     val ROW_BLK_NUM = math.ceil(nRows() * 1.0 / ROWS_PER_BLK).toInt
     val COL_BLK_NUM = math.ceil(nCols() * 1.0 / COLS_PER_BLK).toInt
@@ -37,14 +37,14 @@ class BlockPartitionMatrix (
     val colBlkMap = scala.collection.mutable.Map[Int, Int]()
 
     override def nRows(): Long = {
-        if (nrows <= 0L) {
+        if (nrows <= 0L && blocks != null) {
             getDimension()
         }
         nrows
     }
 
     override def nCols(): Long = {
-        if (ncols <= 0L) {
+        if (ncols <= 0L && blocks != null) {
             getDimension()
         }
         ncols
@@ -373,7 +373,13 @@ class BlockPartitionMatrix (
     }
 
     def +(other: BlockPartitionMatrix): BlockPartitionMatrix = {
-        add(other, (ROWS_PER_BLK, COLS_PER_BLK), genBlockPartitioner())
+        if (blocks != null && other.blocks != null) {
+            add(other, (ROWS_PER_BLK, COLS_PER_BLK), genBlockPartitioner())
+        }
+        else {
+            if (blocks == null) other
+            else this
+        }
     }
 
     def +(other: BlockPartitionMatrix,
@@ -940,6 +946,9 @@ def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMa
 
 object BlockPartitionMatrix {
     // TODO: finish some helper factory methods
+    def zeros(): BlockPartitionMatrix = {
+        new BlockPartitionMatrix(null, 0, 0, 0, 0)
+    }
     def createFromCoordinateEntries(entries: RDD[Entry],
                                     ROWS_PER_BLK: Int,
                                     COLS_PER_BLK: Int,
@@ -1239,6 +1248,8 @@ object TestBlockPartition {
         val denseBlkMat = BlockPartitionMatrix.createDenseBlockMatrix(sc,
             "/Users/yongyangyu/Desktop/krux-master-dev/test/mrna.tab.tmp", 3,6,10,10)
         println(denseBlkMat.toLocalMatrix())
+        val zMat = BlockPartitionMatrix.zeros()
+        println((zMat + denseBlkMat).toLocalMatrix())
         /*val mat = List[(Long, Long)]((0, 0), (0,1), (0,2), (0,3), (0, 4), (0, 5), (1, 0), (1, 2),
             (2, 3), (2, 4), (3,1), (3,2), (3, 4), (4, 5), (5, 4))
         val CooRdd = sc.parallelize(mat, 2).map(x => Entry(x._1, x._2, 1.0))

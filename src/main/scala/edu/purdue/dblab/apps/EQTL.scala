@@ -25,28 +25,30 @@ object EQTL {
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
       .set("spark.cores.max", "64")
-      .set("spark.executor.memory", "48g")
+      .set("spark.executor.memory", "58g")
       //.set("spark.default.parallelism", "64")
       .set("spark.akka.frameSize", "64")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
     val mrnaSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m2, n2)
     val mrnaRank = BlockPartitionMatrix.createDenseBlockMatrix(sc, matrixName2, mrnaSize, mrnaSize,
-      m2, n2, 8, RankData.rankWithNoMissing)
-    val numPartitions = conf.getInt("spark.executor.instances", 8)
+      m2, n2, 64, RankData.rankWithNoMissing)
+    val numPartitions = 64
     //println(s"numPartitions = $numPartitions")
     mrnaRank.repartition(numPartitions)
+    mrnaRank.cache()
     //println("mrnaRank")
     //println(mrnaRank.toLocalMatrix())
     //val genoSize = BlockPartitionMatrix.estimateBlockSizeWithDim(m1, n1)
     // try using the same block size for mrna matrix and geno matrix to avoid reblocking cost
     val geno = BlockPartitionMatrix.createDenseBlockMatrix(sc, matrixName1, mrnaSize, mrnaSize,
-      m1, n1, 8, genoLine)
-    //geno.repartition(numPartitions)
+      m1, n1, 64, genoLine)
+    geno.repartition(numPartitions)
+    geno.cache()
     val I = new Array[BlockPartitionMatrix](3)
     for (i <- 0 until I.length) {
         println(s"I($i) blocks: ")
-        I(i) = genComponentOfI(geno, i)
+        I(i) = genComponentOfI(geno, i).cache()
         println(s"I($i) number of partitions: " + I(i).blocks.partitions.length)
         //println(I(i).toLocalMatrix())
     }
@@ -55,17 +57,21 @@ object EQTL {
     for (i <- 0 until N.length) {
         N(i) = I(i).sumAlongRow()
 
-        //N(i).repartition(numPartitions)
+        N(i).repartition(numPartitions)
         println(s"N($i) number of partitions: " + N(i).blocks.partitions.length)
         //println(N(i).toLocalMatrix())
     }
     println("finish computing N(i) ...")
     val Si = new Array[BlockPartitionMatrix](3)
+    //var II = BlockPartitionMatrix.zeros()
     for (i <- 0 until Si.length) {
-        Si(i) = (mrnaRank %*% I(i).t) ^ 2.0//mrnaRank %*% (I(i).t)
-        println(s"Si($i) number of partitions: " + Si(i).blocks.partitions.length)
+        Si(i) = (mrnaRank %*% I(i).t)// ^ 2.0//mrnaRank %*% (I(i).t)
+        //println(s"Si($i) number of partitions: " + Si(i).blocks.partitions.length)
         //println(Si(i).toLocalMatrix())
+        //II = II + I(i).t
     }
+    //val S = mrnaRank %*% II
+    //S.blocks.filter(x => x._1 == (0,0)).saveAsTextFile(hdfs + "tmp_result/eqtl")
     println("finish computing Si ...")
     val KK = geno.nCols()
     println(s"KK = $KK")

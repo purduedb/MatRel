@@ -27,7 +27,7 @@ class BlockPartitionMatrix (
 
     private var groupByCached: RDD[(Int, Iterable[(Int, MLMatrix)])] = null
 
-    val numPartitions: Int = 8 // 8 workers
+    val numPartitions: Int = 64 // 8 workers
 
     var sparsity: Double = 0.0
 
@@ -107,8 +107,16 @@ class BlockPartitionMatrix (
         val scale = 1.0 / math.sqrt(numPartitions)
         //println(s"In genBlockPartitioner: ROW_BLKS = $ROW_BLK_NUM")
         //println(s"In genBlockPartitioner: COL_BLKS = $COL_BLK_NUM")
-        val ROW_BLKS_PER_PARTITION = math.round(math.max(scale * ROW_BLK_NUM, 1.0)).toInt
-        val COL_BLKS_PER_PARTITION = math.round(math.max(scale * COL_BLK_NUM, 1.0)).toInt
+        var ROW_BLKS_PER_PARTITION = math.round(math.max(scale * ROW_BLK_NUM, 1.0)).toInt
+        var COL_BLKS_PER_PARTITION = math.round(math.max(scale * COL_BLK_NUM, 1.0)).toInt
+        if (ROW_BLKS_PER_PARTITION == 1 || COL_BLKS_PER_PARTITION == 1) {
+            if (ROW_BLKS_PER_PARTITION != 1) {
+                ROW_BLKS_PER_PARTITION = math.round(math.max(ROW_BLKS_PER_PARTITION / 8.0, 1.0)).toInt
+            }
+            if (COL_BLKS_PER_PARTITION != 1) {
+                COL_BLKS_PER_PARTITION = math.round(math.max(COL_BLKS_PER_PARTITION / 8.0, 1.0)).toInt
+            }
+        }
         new BlockCyclicPartitioner(ROW_BLK_NUM, COL_BLK_NUM, ROW_BLKS_PER_PARTITION, COL_BLKS_PER_PARTITION)
     }
 
@@ -606,6 +614,7 @@ class BlockPartitionMatrix (
           s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         // For eQTL use-cases, size(A) < size(B), should broadcast A
         val numPartitions = other.blocks.partitions.length
+        println(s"numParts = $numPartitions")
         other.partitionBy(new ColumnPartitioner(numPartitions))
         // broadcast the smaller matrix to each partition of the larger matrix
         /*val num = blocks.count()
@@ -624,7 +633,7 @@ class BlockPartitionMatrix (
             }
             buffer.iterator
         }
-
+        //println(RDD.count())
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
 }
 
@@ -1052,9 +1061,9 @@ object BlockPartitionMatrix {
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
-        blkSize = blkSize - (blkSize % 1000)
+        blkSize = blkSize - (blkSize % 2000)
         if (blkSize == 0) {
-            1000
+            2000
         }
         else {
             blkSize
@@ -1069,9 +1078,9 @@ object BlockPartitionMatrix {
         println(s"coresPerWorker = $coresPerWorker")
         // make each core to process 4 blocks
         var blkSize = math.sqrt(nrows * ncols / (numWorkers * coresPerWorker * 4)).toInt
-        blkSize = blkSize - (blkSize % 1000)
+        blkSize = blkSize - (blkSize % 2000)
         if (blkSize == 0) {
-            1000
+            2000
         }
         else {
             blkSize

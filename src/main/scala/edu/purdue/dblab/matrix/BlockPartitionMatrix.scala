@@ -601,6 +601,8 @@ class BlockPartitionMatrix (
     def %*%(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         // check for special case
         // i.e., outer-product
+        val memory = nRows() * other.nCols() * 8 / (1024 * 1024 * 1024) * 1.0
+        if (memory > 10) println(s"Caution: matrix multiplication result size = $memory GB")
         if (COL_BLK_NUM == 1 && other.ROW_BLK_NUM == 1) {
             multiplyOuterProduct(other)
         }

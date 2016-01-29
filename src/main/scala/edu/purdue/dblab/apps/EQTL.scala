@@ -65,13 +65,10 @@ object EQTL {
     val Si = new Array[BlockPartitionMatrix](3)
     //var II = BlockPartitionMatrix.zeros()
     for (i <- 0 until Si.length) {
-        Si(i) = (mrnaRank %*% I(i).t)// ^ 2.0//mrnaRank %*% (I(i).t)
+        Si(i) = (mrnaRank %*% I(i).t) ^ 2.0//mrnaRank %*% (I(i).t)
         //println(s"Si($i) number of partitions: " + Si(i).blocks.partitions.length)
         //println(Si(i).toLocalMatrix())
-        //II = II + I(i).t
     }
-    //val S = mrnaRank %*% II
-    //S.blocks.filter(x => x._1 == (0,0)).saveAsTextFile(hdfs + "tmp_result/eqtl")
     println("finish computing Si ...")
     val KK = geno.nCols()
     println(s"KK = $KK")

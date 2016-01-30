@@ -103,6 +103,8 @@ class BlockPartitionMatrix (
     private type MatrixBlk = ((Int, Int), MLMatrix)
     private type PartitionScheme = (Int, Int)
 
+    // generate a block cyclic partitioner to partition the whole block matrix into `numPartitions` partitions
+    // watch out the special case when the matrix only has a single row/col block id
     private def genBlockPartitioner(): BlockCyclicPartitioner = {
         val scale = 1.0 / math.sqrt(numPartitions)
         //println(s"In genBlockPartitioner: ROW_BLKS = $ROW_BLK_NUM")
@@ -286,15 +288,12 @@ class BlockPartitionMatrix (
         val ndup = blocks.partitions.length
         val dupRDD = duplicateCrossPartitions(vec.blocks, ndup)
         val RDD = dupRDD.zipPartitions(blocks, preservesPartitioning = true) { (iter1, iter2) =>
-            val buffer = new ArrayBuffer[MatrixBlk]()
             val dup = iter1.next()._2
-            for (x <- iter2; div <- dup) {
-                if (x._1._2 == div._1._1) {
-                    val v = LocalMatrix.matrixDivideVector(x._2, div._2)
-                    buffer.append((x._1, v))
-                }
-            }
-            buffer.iterator
+            for {
+                x <- iter2
+                div <- dup
+                if (x._1._2 == div._1._1)
+            } yield (x._1, LocalMatrix.matrixDivideVector(x._2, div._2))
         }
         //println(RDD.map{ case ((i, j), v) => (i, j)}.collect().mkString("[", ",", "]"))
         /*val RDD1 = blocks.map { case ((i, j), mat) =>
@@ -382,11 +381,54 @@ class BlockPartitionMatrix (
 
     def +(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         if (blocks != null && other.blocks != null) {
-            add(other, (ROWS_PER_BLK, COLS_PER_BLK), genBlockPartitioner())
+            if (blocks.partitioner.get != null) {
+                add(other, (ROWS_PER_BLK, COLS_PER_BLK), blocks.partitioner.get)
+            }
+            else if (other.blocks.partitioner.get != null) {
+                add(other, (ROWS_PER_BLK, COLS_PER_BLK), other.blocks.partitioner.get)
+            }
+            else {
+                add(other, (ROWS_PER_BLK, COLS_PER_BLK), genBlockPartitioner())
+            }
         }
         else {
             if (blocks == null) other
             else this
+        }
+    }
+
+    def *(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+        if (blocks != null && other.blocks != null) {
+            if (blocks.partitioner.get != null) {
+                this.*(other, blocks.partitioner.get)
+            }
+            else if (other.blocks.partitioner.get != null) {
+                this.*(other, other.blocks.partitioner.get)
+            }
+            else {
+                this.*(other, genBlockPartitioner())
+            }
+        }
+        else {
+            if (blocks == null) this
+            else other
+        }
+    }
+
+    def /(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+        if (blocks != null && other.blocks != null) {
+            if (blocks.partitioner.get != null) {
+                this./(other, blocks.partitioner.get)
+            }
+            else if (other.blocks.partitioner.get != null) {
+                this./(other, other.blocks.partitioner.get)
+            }
+            else {
+                this./(other, genBlockPartitioner())
+            }
+        }
+        else {
+            BlockPartitionMatrix.zeros()
         }
     }
 
@@ -626,14 +668,11 @@ class BlockPartitionMatrix (
         val dupRDD = duplicateCrossPartitions(blocks, numPartitions)
 
         val RDD = dupRDD.zipPartitions(other.blocks, preservesPartitioning = true) { (iter1, iter2) =>
-            val buffer = new ArrayBuffer[MatrixBlk]()
             val dup = iter1.next()._2
-            for (x2 <- iter2; x1 <- dup) {
-                val blkIdx = (x1._1._1, x2._1._2)
-                val v = LocalMatrix.matrixMultiplication(x1._2, x2._2)
-                buffer.append((blkIdx, v))
-            }
-            buffer.iterator
+            for {
+                x2 <- iter2
+                x1 <- dup
+            } yield ((x1._1._1, x2._1._2), LocalMatrix.matrixMultiplication(x1._2, x2._2))
         }
         //println(RDD.count())
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
@@ -687,15 +726,16 @@ class BlockPartitionMatrix (
         val rddC = rdd1.join(rdd2)
             .values
             .flatMap{ case (iterA, iterB) =>
-                //val product = mutable.ArrayBuffer[((Int, Int), BM[Double])]()
-                val product = mutable.ArrayBuffer[((Int, Int), MLMatrix)]()
+                for (blk1 <- iterA; blk2 <- iterB)
+                    yield ((blk1._1, blk2._1), LocalMatrix.matrixMultiplication(blk1._2, blk2._2))
+                /*val product = mutable.ArrayBuffer[((Int, Int), MLMatrix)]()
                 for (blk1 <- iterA; blk2 <- iterB) {
                     val idx = (blk1._1, blk2._1)
                     val c = LocalMatrix.matrixMultiplication(blk1._2, blk2._2)
                     //product.append((idx, LocalMatrix.toBreeze(c)))
                     product.append((idx, c))
                 }
-                product
+                product*/
             }.reduceByKey(LocalMatrix.add(_, _))
 
 
@@ -815,11 +855,13 @@ def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMa
     // duplicate the matrix for parNum copies and distribute them over the cluster
     private def duplicateCrossPartitions(rdd: RDD[MatrixBlk], parNum: Int): RDD[(Int, Iterable[MatrixBlk])] = {
         rdd.flatMap{ case ((row, col), mat) =>
-            val arr = new Array[(Int, MatrixBlk)](parNum)
+            /*val arr = new Array[(Int, MatrixBlk)](parNum)
             for (i <- 0 until parNum) {
                 arr(i) = (i, ((row, col), mat))
             }
-            arr
+            arr*/
+            for (i <- 0 until parNum)
+                yield (i, ((row, col), mat))
         }.groupByKey(new IndexPartitioner(parNum))
         //.mapValues(iter => iter.toIterator)
     }

@@ -640,6 +640,8 @@ class BlockPartitionMatrix (
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
     }
 
+    // One reason to use `%*%` as matrix multiplication operator is because our
+    // system also supports matrix element-wise multiplications.
     def %*%(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         // check for special case
         // i.e., outer-product

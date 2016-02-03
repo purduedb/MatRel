@@ -15,7 +15,8 @@ object PageRankMLlib {
         println("Usage: PageRank <graph> [<iter>]")
         System.exit(1)
       }
-      val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
+      val hdfs = "hdfs://10.100.121.126:8022/"
+      val graphName = hdfs + args(0)//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
       var niter = 0
       if (args.length > 1) niter = args(1).toInt else niter = 10
       val conf = new SparkConf()
@@ -24,8 +25,8 @@ object PageRankMLlib {
         .set("spark.shuffle.consolidateFiles", "true")
         .set("spark.shuffle.compress", "false")
         .set("spark.cores.max", "64")
-        .set("spark.executor.memory", "6g")
-        .set("spark.default.parallelism", "256")
+        .set("spark.executor.memory", "48g")
+        //.set("spark.default.parallelism", "256")
         .set("spark.akka.frameSize", "64")
       conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
       val sc = new SparkContext(conf)
@@ -41,7 +42,7 @@ object PageRankMLlib {
       for (i <- 0 until niter) {
           x = scalarMul(matrix, alpha).multiply(x).add(scalarMul(v, 1-alpha))
       }
-      x.blocks.count()
+      x.blocks.saveAsTextFile(hdfs + "tmp_result/pagerank")
       Thread.sleep(10000)
     }
 

@@ -13,7 +13,8 @@ object PageRankBlockHDFS {
       println("Usage: PageRank <graph> [<iter>]")
       System.exit(1)
     }
-    val graphName = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
+    val hdfs = "hdfs://10.100.121.126:8022/"
+    val graphName = hdfs + args(0)//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
     //val blk_row_size = args(1).toInt
     //val blk_col_size = args(2).toInt
     var niter = 0
@@ -23,9 +24,9 @@ object PageRankBlockHDFS {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "16")
-      .set("spark.executor.memory", "7g")
-      .set("spark.default.parallelism", "256")
+      .set("spark.cores.max", "64")
+      .set("spark.executor.memory", "48g")
+      //.set("spark.default.parallelism", "256")
       .set("spark.akka.frameSize", "64")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
@@ -42,13 +43,13 @@ object PageRankBlockHDFS {
     matrix = (alpha *:matrix).cache()
     matrix.stat()
     v = (1.0 - alpha) *:v
-    val t1 = System.currentTimeMillis()
+    //val t1 = System.currentTimeMillis()
     for (i <- 0 until niter) {
       x =  matrix %*% x + (v, (blkSize, blkSize), v.partitioner)
       //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (blk_col_size, blk_col_size))
     }
-    //x.blocks.count()
-
+    x.saveAsTextFile(hdfs + "tmp_result/pagerank")
+    Thread.sleep(10000)
     /*val result = Array.fill(x.nRows().toInt)((0L, 0.0))
     val values = x.toLocalMatrix()
     for (i <- 0 until result.length) {
@@ -59,12 +60,12 @@ object PageRankBlockHDFS {
     for (i <- 0 until 5) {
       println(result(i))
     }*/
-    var t2 = System.currentTimeMillis()
+    /*var t2 = System.currentTimeMillis()
     println("t2 - t1 = " + (t2-t1)/1000.0 + "sec")
     println(x.topK(5).mkString("\n"))
     t2 = System.currentTimeMillis()
     println("t2 - t1 = " + (t2-t1)/1000.0 + "sec")
-    sc.stop()
+    sc.stop()*/
   }
 
   def genCoordinateRdd(sc: SparkContext, graphName: String): RDD[Entry] = {

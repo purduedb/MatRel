@@ -26,7 +26,7 @@ object PageRankMLlib {
         .set("spark.shuffle.compress", "false")
         .set("spark.cores.max", "64")
         .set("spark.executor.memory", "48g")
-        //.set("spark.default.parallelism", "256")
+        .set("spark.default.parallelism", "64")
         .set("spark.akka.frameSize", "64")
       conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
       val sc = new SparkContext(conf)

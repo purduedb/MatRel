@@ -397,12 +397,12 @@ object LocalMatrix {
 
     private def multiplyScalarDense(alpha: Double, ma: DenseMatrix): MLMatrix = {
         val arr = for (elem <- ma.values) yield alpha * elem
-        new DenseMatrix(ma.numRows, ma.numCols, arr)
+        new DenseMatrix(ma.numRows, ma.numCols, arr, ma.isTransposed)
     }
 
     private def multiplyScalarSparse(alpha: Double, ma: SparseMatrix): MLMatrix = {
         val arr = for (elem <- ma.values) yield alpha * elem
-        new SparseMatrix(ma.numRows, ma.numCols, ma.colPtrs, ma.rowIndices, arr)
+        new SparseMatrix(ma.numRows, ma.numCols, ma.colPtrs, ma.rowIndices, arr, ma.isTransposed)
     }
 
     def toBreeze(mat: MLMatrix): BM[Double] = {

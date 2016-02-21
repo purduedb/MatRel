@@ -696,11 +696,11 @@ class BlockPartitionMatrix (
             //useOtherMatrix = true
         }
         // other.ROWS_PER_BLK = COLS_PER_BLK and square blk for other
-        val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
+        //val OTHER_COL_BLK_NUM = math.ceil(other.nCols() * 1.0 / COLS_PER_BLK).toInt
         //val otherMatrix = new BlockPartitionMatrix(rddB, COLS_PER_BLK, COLS_PER_BLK, other.nRows(), other.nCols())
         //val resPartitioner = BlockCyclicPartitioner(ROW_BLK_NUM, OTHER_COL_BLK_NUM, numWorkers)
 
-        val resPartitioner = genBlockPartitioner()//new RowPartitioner(numPartitions)
+        //val resPartitioner = genBlockPartitioner()//new RowPartitioner(numPartitions)
         if (groupByCached == null) {
             groupByCached = blocks.map{ case ((rowIdx, colIdx), matA) =>
                 (colIdx, (rowIdx, matA))
@@ -750,7 +750,51 @@ class BlockPartitionMatrix (
         val t2 = System.currentTimeMillis()
         println("Matrix multiplication takes: " + (t2-t1)/1000.0 + " sec")
         new BlockPartitionMatrix(rddC, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
-}
+    }
+
+    // A %*% B, suppose matrix B is small enough that B can be duplicated and sent
+    // to each partition of A for multiplication. This is especially useful for mat-vec operation.
+    // It seems that the duplicate method is not efficient enough as supposed to.
+    def multiplyDuplicate(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+        require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
+        s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
+        var rddB = other.blocks
+        if (COLS_PER_BLK != other.ROWS_PER_BLK) {
+            logWarning(s"Repartition matrix B since A.col_per_blk = $COLS_PER_BLK " +
+            s"and B.row_per_blk = ${other.ROWS_PER_BLK}")
+            rddB = getNewBlocks(other.blocks, other.ROWS_PER_BLK, other.COLS_PER_BLK,
+                COLS_PER_BLK, COLS_PER_BLK, new RowPartitioner(numPartitions))
+        }
+        if (groupByCached == null) {
+            groupByCached = blocks.map{ case ((i, j), mat) =>
+                (i, (j, mat))
+            }.groupByKey().cache()
+        }
+        val rdd1 = groupByCached
+        val rdd2 = duplicateCrossPartitions(rddB, rdd1.partitions.length)
+        val rdd = rdd1.zipPartitions(rdd2, preservesPartitioning = true) { (iter1, iter2) =>
+            val dup = iter2.next()._2
+            val buffer = new ArrayBuffer[MatrixBlk]()
+            for (p <- iter1) {
+                val i = p._1
+                for (x <- p._2) {
+                    var tmp: MLMatrix = null
+                    for (y <- dup) {
+                        if (x._1 == y._1._1) {
+                            val mul = LocalMatrix.matrixMultiplication(x._2, y._2)
+                            if (tmp == null) tmp = mul
+                            else {
+                                tmp = LocalMatrix.add(tmp, mul)
+                            }
+                        }
+                    }
+                    buffer.append(((i, 0), tmp))
+                }
+            }
+            buffer.iterator
+        }
+        new BlockPartitionMatrix(rdd, ROWS_PER_BLK, COLS_PER_BLK, nRows(), other.nCols())
+    }
 
     // just for comparison purpose, not used in the multiplication code
     def multiplyDMAC(other: BlockPartitionMatrix): BlockPartitionMatrix = {
@@ -1230,6 +1274,25 @@ object BlockPartitionMatrix {
              buffer
          }
         new BlockPartitionMatrix(RDD, ROWS_PER_BLOCK, COLS_PER_BLOCK, nrows, ncols)
+    }
+
+    // create a uniform random matrix according to the given dimensions
+    def randMatrix(sc: SparkContext,
+                   nrows: Long,
+                   ncols: Long,
+                   blkSize: Int,
+                   min: Double = 0.0,
+                   max: Double = 1.0): BlockPartitionMatrix = {
+        val rowBlkCnt = math.ceil(nrows * 1.0 / blkSize).toInt
+        val colBlkCnt = math.ceil(ncols * 1.0 / blkSize).toInt
+        val idx = for (i <- 0 until rowBlkCnt; j <- 0 until colBlkCnt) yield (i, j)
+        val blkId = sc.parallelize(idx)
+        val rdd = blkId.map { case (i, j) =>
+            val curRow = math.min(blkSize, nrows - i * blkSize).toInt
+            val curCol = math.min(blkSize, ncols - j * blkSize).toInt
+            ((i, j), LocalMatrix.rand(curRow, curCol, min, max))
+        }
+        new BlockPartitionMatrix(rdd, blkSize, blkSize, nrows, ncols)
     }
 }
 

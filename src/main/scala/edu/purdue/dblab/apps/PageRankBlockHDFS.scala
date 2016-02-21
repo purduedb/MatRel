@@ -9,29 +9,31 @@ import org.apache.spark.{SparkConf, SparkContext}
  */
 object PageRankBlockHDFS {
   def main (args: Array[String]) {
-    if (args.length < 1) {
-      println("Usage: PageRank <graph> [<iter>]")
+    if (args.length < 2) {
+      println("Usage: PageRank <graph> <graphSize> [<iter>]")
       System.exit(1)
     }
     val hdfs = "hdfs://10.100.121.126:8022/"
+    val graphSize = args(1).toLong // graphSize is the `true size + 1`
     val graphName = hdfs + args(0)//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/" + args(0)
     //val blk_row_size = args(1).toInt
     //val blk_col_size = args(2).toInt
     var niter = 0
-    if (args.length > 1) niter = args(1).toInt else niter = 10
+    if (args.length > 2) niter = args(2).toInt else niter = 10
     val conf = new SparkConf()
       .setAppName("PageRank algorithm on block matrices")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "64")
+      .set("spark.cores.max", "80")
       .set("spark.executor.memory", "48g")
-      //.set("spark.default.parallelism", "256")
-      .set("spark.akka.frameSize", "64")
+      .set("spark.default.parallelism", "250")
+      .set("spark.akka.frameSize", "1600")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
     val coordinateRdd = genCoordinateRdd(sc, graphName)
-    val blkSize = BlockPartitionMatrix.estimateBlockSize(coordinateRdd)
+    var blkSize = BlockPartitionMatrix.estimateBlockSizeWithDim(graphSize, graphSize)
+    if (blkSize > 800000) blkSize = 800000
     var matrix = BlockPartitionMatrix.PageRankMatrixFromCoordinateEntries(coordinateRdd, blkSize, blkSize)
     //matrix.partitionByBlockCyclic()
     matrix.partitionBy(new ColumnPartitioner(matrix.COL_BLK_NUM))

@@ -1021,6 +1021,16 @@ object LocalMatrix {
                 }
         }
     }
+
+    // return a uniform random local matrix
+    def rand(nrows: Int, ncols: Int, min: Double, max: Double): MLMatrix = {
+        val arr = new Array[Double](nrows * ncols)
+        val random = scala.util.Random
+        for (i <- 0 until arr.length) {
+            arr(i) = min + (max - min) * random.nextDouble()
+        }
+        new DenseMatrix(nrows, ncols, arr)
+    }
 }
 
 object TestSparse {

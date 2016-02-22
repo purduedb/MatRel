@@ -1,6 +1,6 @@
 package edu.purdue.dblab.apps
 
-import edu.purdue.dblab.matrix.{Entry, BlockPartitionMatrix}
+import edu.purdue.dblab.matrix.{ColumnPartitioner, RowPartitioner, Entry, BlockPartitionMatrix}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkContext, SparkConf}
 
@@ -36,8 +36,8 @@ object GNMF {
         val blkSize = BlockPartitionMatrix.estimateBlockSizeWithDim(nrows, ncols)
         val V = BlockPartitionMatrix.createFromCoordinateEntries(genCOORdd(sc,
           matrixName), blkSize, blkSize, nrows, ncols)
-        var W = BlockPartitionMatrix.randMatrix(sc, nrows, nfeature, blkSize)
-        var H = BlockPartitionMatrix.randMatrix(sc, nfeature, ncols, blkSize)
+        var W = BlockPartitionMatrix.randMatrix(sc, nrows, nfeature, blkSize).partitionBy(new RowPartitioner(64))
+        var H = BlockPartitionMatrix.randMatrix(sc, nfeature, ncols, blkSize).partitionBy(new ColumnPartitioner(64))
         val eps = 1e-8
         for (i <- 0 until niter) {
             H = H * (W.t %*% V) / (((W.t %*% W) %*% H) + eps)

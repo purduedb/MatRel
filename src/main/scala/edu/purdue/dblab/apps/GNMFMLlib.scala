@@ -13,7 +13,7 @@ import org.apache.spark.{SparkException, SparkContext, SparkConf}
 object GNMFMLlib {
     def main(args: Array[String]) {
         if (args.length < 4) {
-            println("Usage: GNMF <matrix> <nrows> <nfeatures> [<niter>]")
+            println("Usage: GNMF <matrix> <nrows> <ncols> <nfeatures> [<niter>]")
             System.exit(1)
         }
         val hdfs = "hdfs://10.100.121.126:8022/"

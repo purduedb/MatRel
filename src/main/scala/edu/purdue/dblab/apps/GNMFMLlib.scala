@@ -123,7 +123,7 @@ object GNMFMLlib {
         val rdd = left.blocks.join(right.blocks).map { case((i, j), (mat1, mat2)) =>
             ((i, j), localDivide(mat1, mat2))
         }
-        new BlockMatrix(rdd, left.rowsPerBlock, left.colsPerBlock, left.numRows(), left.numCols()
+        new BlockMatrix(rdd, left.rowsPerBlock, left.colsPerBlock, left.numRows(), left.numCols())
     }
 
     def localDivide(mat1: Matrix,  mat2: Matrix): Matrix = {

@@ -33,10 +33,14 @@ object GNMFMLlib {
                       .set("spark.akka.frameSize", "1024")
         conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
         val sc = new SparkContext(conf)
-        val blkSize = BlockPartitionMatrix.estimateBlockSizeWithDim(nrows, ncols)
         val V = new CoordinateMatrix(getCOORdd(sc, matrixName), nrows, ncols).toBlockMatrix()
-        var W = randomBlockMatrix(sc, nrows, nfeature, blkSize)
-        var H = randomBlockMatrix(sc, nfeature, ncols, blkSize)
+        val blkSize = (V.rowsPerBlock, V.colsPerBlock)
+        if (blkSize._1 != blkSize._2) {
+            println(s"non-square blocks, ${blkSize}")
+            System.exit(1)
+        }
+        var W = randomBlockMatrix(sc, nrows, nfeature, blkSize._1)
+        var H = randomBlockMatrix(sc, nfeature, ncols, blkSize._1)
         val eps = 1e-8
         for (i <- 0 until niter) {
             H = elemMultiply(H, W.transpose.multiply(V))

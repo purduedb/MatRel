@@ -48,7 +48,7 @@ object GNMFMLlib {
             H = elemDivide(H, tmp1)
             W = elemMultiply(W, V.multiply(H.transpose))
             val tmp2 = addScala(W.multiply(H).multiply(H.transpose), eps)
-            W = elemDivide(H, tmp2)
+            W = elemDivide(W, tmp2)
         }
         W.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf")
         H.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf")

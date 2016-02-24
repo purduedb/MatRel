@@ -648,19 +648,26 @@ class BlockPartitionMatrix (
         val memory = nRows() * other.nCols() * 8 / (1024 * 1024 * 1024) * 1.0
         if (memory > 10) println(s"Caution: matrix multiplication result size = $memory GB")
         if (COL_BLK_NUM == 1 && other.ROW_BLK_NUM == 1) {
-            multiplyOuterProduct(other)
+            val nblks1 = nRows() / ROWS_PER_BLK
+            val nblks2 = other.nCols() / other.COLS_PER_BLK
+            if (nblks1 <= nblks2) {
+                multiplyOuterProductDupLeft(other)
+            }
+            else {
+                multiplyOuterProductDupRight(other)
+            }
         }
         else {
             multiply(other)
         }
     }
 
-    def multiplyOuterProduct(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+    def multiplyOuterProductDupLeft(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
           s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
         // For eQTL use-cases, size(A) < size(B), should broadcast A
         val numPartitions = other.blocks.partitions.length
-        println(s"numParts = $numPartitions")
+        println(s"B.numParts = $numPartitions")
         other.partitionBy(new ColumnPartitioner(numPartitions))
         // broadcast the smaller matrix to each partition of the larger matrix
         /*val num = blocks.count()
@@ -678,7 +685,24 @@ class BlockPartitionMatrix (
         }
         //println(RDD.count())
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
-}
+    }
+
+    def multiplyOuterProductDupRight(other: BlockPartitionMatrix): BlockPartitionMatrix = {
+        require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +
+          s"A.numCols = ${nCols()}, B.numRows = ${other.nRows()}")
+        val numPartitions = blocks.partitions.length
+        println(s"A.numParts = $numPartitions")
+        this.partitionBy(new RowPartitioner(numPartitions))
+        val dupRDD = duplicateCrossPartitions(other.blocks, numPartitions)
+        val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
+            val dup = iter2.next()._2
+            for {
+                x1 <- iter1
+                x2 <- dup
+            } yield ((x1._1._1, x2._1._2), LocalMatrix.matrixMultiplication(x1._2, x2._2))
+        }
+        new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
+    }
 
     // TODO: currently the repartitioning of A * B will perform on matrix B
     // TODO: if blocks of B do not conform with blocks of A, need to find an optimal strategy

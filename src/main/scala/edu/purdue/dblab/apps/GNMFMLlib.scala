@@ -1,6 +1,5 @@
 package edu.purdue.dblab.apps
 
-import edu.purdue.dblab.matrix.{MLMatrix, BlockPartitionMatrix}
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry, BlockMatrix}
 import org.apache.spark.mllib.linalg.{DenseMatrix, SparseMatrix, Matrix}
 import org.apache.spark.rdd.RDD
@@ -34,6 +33,7 @@ object GNMFMLlib {
         conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
         val sc = new SparkContext(conf)
         val V = new CoordinateMatrix(getCOORdd(sc, matrixName), nrows, ncols).toBlockMatrix()
+        V.blocks.cache() // cache matrix V since it is used multiple times
         val blkSize = (V.rowsPerBlock, V.colsPerBlock)
         if (blkSize._1 != blkSize._2) {
             println(s"non-square blocks, ${blkSize}")
@@ -42,13 +42,12 @@ object GNMFMLlib {
         var W = randomBlockMatrix(sc, nrows, nfeature, blkSize._1)
         var H = randomBlockMatrix(sc, nfeature, ncols, blkSize._1)
         val eps = 1e-8
+        // both W and H are small matrices, no big overheads for caching them
         for (i <- 0 until niter) {
-            H = elemMultiply(H, W.transpose.multiply(V))
-            val tmp1 = addScala(W.transpose.multiply(W).multiply(H), eps)
-            H = elemDivide(H, tmp1)
-            W = elemMultiply(W, V.multiply(H.transpose))
-            val tmp2 = addScala(W.multiply(H).multiply(H.transpose), eps)
-            W = elemDivide(W, tmp2)
+            H = elemDivide(elemMultiply(H, W.transpose.multiply(V)), addScala(W.transpose.multiply(W).multiply(H), eps))
+            H.blocks.cache()
+            W = elemDivide(elemMultiply(W, V.multiply(H.transpose)), addScala(W.multiply(H).multiply(H.transpose), eps))
+            W.blocks.cache()
         }
         W.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf")
         H.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf")

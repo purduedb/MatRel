@@ -35,7 +35,7 @@ object GNMF {
         val sc = new SparkContext(conf)
         val blkSize = BlockPartitionMatrix.estimateBlockSizeWithDim(nrows, ncols)
         val V = BlockPartitionMatrix.createFromCoordinateEntries(genCOORdd(sc,
-          matrixName), blkSize, blkSize, nrows, ncols)
+          matrixName), blkSize, blkSize, nrows, ncols).cache()
         var W = BlockPartitionMatrix.randMatrix(sc, nrows, nfeature, blkSize).partitionBy(new RowPartitioner(64))
         var H = BlockPartitionMatrix.randMatrix(sc, nfeature, ncols, blkSize).partitionBy(new ColumnPartitioner(64))
         val eps = 1e-8

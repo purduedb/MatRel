@@ -45,8 +45,8 @@ object GNMF {
             W = W * (V %*% H.t) / ((W %*% (H %*% H.t)) + eps)
             W.cache()
         }
-        W.saveAsTextFile(hdfs + "tmp_result/gnmf")
-        H.saveAsTextFile(hdfs + "tmp_result/gnmf")
+        W.saveAsTextFile(hdfs + "tmp_result/gnmf/W")
+        H.saveAsTextFile(hdfs + "tmp_result/gnmf/H")
         Thread.sleep(10000)
     }
 

@@ -49,8 +49,8 @@ object GNMFMLlib {
             W = elemDivide(elemMultiply(W, V.multiply(H.transpose)), addScala(W.multiply(H).multiply(H.transpose), eps))
             W.blocks.cache()
         }
-        W.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf")
-        H.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf")
+        W.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf/W")
+        H.blocks.saveAsTextFile(hdfs + "tmp_result/gnmf/H")
         Thread.sleep(10000)
     }
 

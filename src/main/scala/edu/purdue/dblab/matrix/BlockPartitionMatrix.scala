@@ -314,11 +314,11 @@ class BlockPartitionMatrix (
         require(nCols() == other.nCols(), s"Two matrices must have the same number of cols. " +
           s"A.cols: ${nCols()}, B.cols: ${other.nCols()}")
         var rdd1 = blocks
-        if (!rdd1.partitioner.get.isInstanceOf[partitioner.type]) {
+        if (!rdd1.partitioner.isDefined || !rdd1.partitioner.get.isInstanceOf[partitioner.type]) {
             rdd1 = rdd1.partitionBy(partitioner)
         }
         var rdd2 = other.blocks
-        if (!rdd2.partitioner.get.isInstanceOf[partitioner.type]) {
+        if (!rdd2.partitioner.isDefined || !rdd2.partitioner.get.isInstanceOf[partitioner.type]) {
             rdd2 = rdd2.partitionBy(partitioner)
         }
         val rdd = rdd1.zipPartitions(rdd2, preservesPartitioning = true) {
@@ -704,8 +704,10 @@ class BlockPartitionMatrix (
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, other.COLS_PER_BLK, nRows(), other.nCols())
     }
 
-    // TODO: currently the repartitioning of A * B will perform on matrix B
-    // TODO: if blocks of B do not conform with blocks of A, need to find an optimal strategy
+    // currently the repartitioning of A * B will perform on matrix B
+    // if blocks of B do not conform with blocks of A, need to find an optimal strategy
+    // NOTE: the generic multiplication method works best for general matrices, such that both are
+    //       square matrices of similar dimensions. However, for the degenerated case,
     def multiply(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         val t1 = System.currentTimeMillis()
         require(nCols() == other.nRows(), s"#cols of A should be equal to #rows of B, but found " +

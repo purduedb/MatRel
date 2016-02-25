@@ -28,7 +28,7 @@ object GNMFMLlib {
                       .set("spark.shuffle.compress", "false")
                       .set("spark.cores.max", "80")
                       .set("spark.executor.memory", "48g")
-                      .set("spark.default.parallelism", "200")
+                      .set("spark.default.parallelism", "100")
                       .set("spark.akka.frameSize", "1024")
         conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
         val sc = new SparkContext(conf)

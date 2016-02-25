@@ -24,12 +24,12 @@ object GNMF {
         if (args.length > 4) niter = args(4).toInt else niter = 10
         val conf = new SparkConf()
                       .setAppName("Gaussian non-negative matrix factorization")
-                      .set("spark.serializer", "org.apache.spark.serializer.KryoSerialilzer")
+                      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
                       .set("spark.shuffle.consolidateFiles", "true")
                       .set("spark.shuffle.compress", "false")
                       .set("spark.cores.max", "80")
                       .set("spark.executor.memory", "48g")
-                      .set("spark.default.parallelism", "200")
+                      .set("spark.default.parallelism", "100")
                       .set("spark.akka.frameSize", "1024")
         conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
         val sc = new SparkContext(conf)
@@ -41,7 +41,9 @@ object GNMF {
         val eps = 1e-8
         for (i <- 0 until niter) {
             H = H * (W.t %*% V) / (((W.t %*% W) %*% H) + eps)
+            H.cache()
             W = W * (V %*% H.t) / ((W %*% (H %*% H.t)) + eps)
+            W.cache()
         }
         W.saveAsTextFile(hdfs + "tmp_result/gnmf")
         H.saveAsTextFile(hdfs + "tmp_result/gnmf")

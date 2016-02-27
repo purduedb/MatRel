@@ -2,15 +2,15 @@ package edu.purdue.dblab.apps
 
 import edu.purdue.dblab.matrix.{BlockPartitionMatrix, Entry}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.{SparkException, SparkContext, SparkConf}
 
 /**
   * Created by yongyangyu on 2/26/16.
   */
 object MatixChainMultiplication4 {
     def main(args: Array[String]) {
-        if (args.length < 12) {
-            println("Usage: matrix1 row1 col1 matrix2 row2 col2 matrix3 row3 col3 matrix4 row4 col4")
+        if (args.length < 13) {
+            println("Usage: matrix1 row1 col1 matrix2 row2 col2 matrix3 row3 col3 matrix4 row4 col4 planNo.")
             System.exit(1)
         }
         val hdfs = "hdfs://10.100.121.126:8022/"
@@ -22,6 +22,7 @@ object MatixChainMultiplication4 {
         val (m3, n3) = (args(7).toLong, args(8).toLong)
         val matrixName4 = hdfs + args(9)
         val (m4, n4) = (args(10).toLong, args(11).toLong)
+        val plan = args(12).toInt
         val conf = new SparkConf()
                   .setAppName("Matrix multiplication chain of size 4")
                   .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -43,31 +44,40 @@ object MatixChainMultiplication4 {
         val matrix2 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD2, blkSize, blkSize, m2, n2)
         val matrix3 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD3, blkSize, blkSize, m3, n3)
         val matrix4 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD4, blkSize, blkSize, m4, n4)
-        var t1 = System.currentTimeMillis()
-        val res1 = matrix1 %*% matrix2 %*% matrix3 %*% matrix4
-        res1.saveAsTextFile(hdfs + "tmp_result/mult/res1")
-        var t2 = System.currentTimeMillis()
-        println("t2 - t1 = " + (t2 - t1)/1000.0 + " sec for ((A1*A2)*A3)*A4")
-        t1 = System.currentTimeMillis()
-        val res2 = (matrix1 %*% (matrix2 %*% matrix3)) %*% matrix4
-        res2.saveAsTextFile(hdfs + "tmp_result/mult/res2")
-        t2 = System.currentTimeMillis()
-        println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for (A1*(A2*A3))*A4")
-        t1 = System.currentTimeMillis()
-        val res3 = matrix1 %*% (matrix2 %*% matrix3 %*% matrix4)
-        res3.saveAsTextFile(hdfs + "tmp_result/mult/res3")
-        t2 = System.currentTimeMillis()
-        println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for A1*(A2*A3*A4)")
-        t1 = System.currentTimeMillis()
-        val res4 = matrix1 %*% (matrix2 %*% (matrix3 %*% matrix4))
-        res4.saveAsTextFile(hdfs + "tmp_result/mult/res4")
-        t2 = System.currentTimeMillis()
-        println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for A1*(A2*(A3*A4))")
-        t1 = System.currentTimeMillis()
-        val res5 = (matrix1 %*% matrix2) %*% (matrix3 %*% matrix4)
-        res5.saveAsTextFile(hdfs + "tmp_result/mult/res5")
-        t2 = System.currentTimeMillis()
-        println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for (A1*A2)*(A3*A4)")
+        plan match {
+            case 1 =>
+                val t1 = System.currentTimeMillis()
+                val res1 = matrix1 %*% matrix2 %*% matrix3 %*% matrix4
+                res1.saveAsTextFile(hdfs + "tmp_result/mult/res1")
+                val t2 = System.currentTimeMillis()
+                println("t2 - t1 = " + (t2 - t1)/1000.0 + " sec for ((A1*A2)*A3)*A4")
+            case 2 =>
+                val t1 = System.currentTimeMillis()
+                val res2 = (matrix1 %*% (matrix2 %*% matrix3)) %*% matrix4
+                res2.saveAsTextFile(hdfs + "tmp_result/mult/res2")
+                val t2 = System.currentTimeMillis()
+                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for (A1*(A2*A3))*A4")
+            case 3 =>
+                val t1 = System.currentTimeMillis()
+                val res3 = matrix1 %*% (matrix2 %*% matrix3 %*% matrix4)
+                res3.saveAsTextFile(hdfs + "tmp_result/mult/res3")
+                val t2 = System.currentTimeMillis()
+                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for A1*(A2*A3*A4)")
+            case 4 =>
+                val t1 = System.currentTimeMillis()
+                val res4 = matrix1 %*% (matrix2 %*% (matrix3 %*% matrix4))
+                res4.saveAsTextFile(hdfs + "tmp_result/mult/res4")
+                val t2 = System.currentTimeMillis()
+                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for A1*(A2*(A3*A4))")
+            case 5 =>
+                val t1 = System.currentTimeMillis()
+                val res5 = (matrix1 %*% matrix2) %*% (matrix3 %*% matrix4)
+                res5.saveAsTextFile(hdfs + "tmp_result/mult/res5")
+                val t2 = System.currentTimeMillis()
+                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for (A1*A2)*(A3*A4)")
+            case _ =>
+                throw new SparkException("planNo. out of range!")
+        }
     }
 
     def genCoordinateRdd(sc: SparkContext, matrixName: String): RDD[Entry] = {

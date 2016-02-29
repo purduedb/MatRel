@@ -446,7 +446,7 @@ class BlockPartitionMatrix (
     def add(other: BlockPartitionMatrix,
             dimension: PartitionScheme = (ROWS_PER_BLK, COLS_PER_BLK),
             partitioner: Partitioner): BlockPartitionMatrix = {
-        val t1 = System.currentTimeMillis()
+        //val t1 = System.currentTimeMillis()
         require(nRows() == other.nRows(), s"Two matrices must have the same number of rows. " +
         s"A.rows: ${nRows()}, B.rows: ${other.nRows()}")
         require(nCols() == other.nCols(), s"Two matrices must have the same number of cols. " +
@@ -490,8 +490,8 @@ class BlockPartitionMatrix (
                 }*/
             }
             // place holder
-            val t2 = System.currentTimeMillis()
-            println("Matrix addition takes: " + (t2-t1)/1000.0 + " sec")
+            //val t2 = System.currentTimeMillis()
+            //println("Matrix addition takes: " + (t2-t1)/1000.0 + " sec")
             addSameDim(rddA.partitionBy(partitioner), rddB.partitionBy(partitioner),
                 dimension._1, dimension._2)
         }

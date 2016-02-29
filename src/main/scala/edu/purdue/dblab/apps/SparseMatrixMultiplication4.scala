@@ -14,7 +14,7 @@ object SparseMatrixMultiplication4 {
       println("Usage: matrix1 row1 col1 matrix2 row2 col2 matrix3 row3 col3 matrix4 row4 col4")
       System.exit(1)
     }
-    val hdfs = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/";
+    val hdfs = "hdfs://10.100.121.126:8022/"//"hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
     val matrixName1 = hdfs + args(0)
     val (m1, n1) = (args(1).toLong, args(2).toLong)
     val matrixName2 = hdfs + args(3)
@@ -28,10 +28,10 @@ object SparseMatrixMultiplication4 {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "64")
-      .set("spark.executor.memory", "6g")
-      .set("spark.default.parallelism", "256")
-      .set("spark.akka.frameSize", "64")
+      .set("spark.cores.max", "80")
+      .set("spark.executor.memory", "20g")
+      .set("spark.default.parallelism", "200")
+      .set("spark.akka.frameSize", "512")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
     val coordRDD1 = genCoordinateRdd(sc, matrixName1)
@@ -44,41 +44,81 @@ object SparseMatrixMultiplication4 {
     val matrix2 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD2, size, size, m2, n2)
     val matrix3 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD3, size, size, m3, n3)
     val matrix4 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD4, size, size, m4, n4)
-    val t1 = System.currentTimeMillis()
-    var res: BlockPartitionMatrix = null
-    val res23 = matrix2 %*% matrix3
+    // sample among A1, A2, A3, and A4 to decide which multiplication should be done first
     matrix1.sample(0.1)
-    res23.sample(0.1)
+    matrix2.sample(0.1)
+    matrix3.sample(0.1)
     matrix4.sample(0.1)
-    var cost1 = 0L
-    var cost2 = 0L
+    var cost12 = 0L
     for ((k, v) <- matrix1.colBlkMap) {
-        if (res23.rowBlkMap.contains(k)) {
-            println(s"A.colMap($k)->$v")
-            println(s"res23.rowMap($k)->${res23.rowBlkMap(k)}")
-            cost1 += v.toLong * res23.rowBlkMap(k).toLong
+        if (matrix2.rowBlkMap.contains(k)) {
+            cost12 += v.toLong * matrix2.rowBlkMap(k).toLong
         }
     }
-    for ((k, v) <- res23.colBlkMap) {
-        if (matrix4.rowBlkMap.contains(k)) {
-            println(s"res23.colMap($k)->$v")
-            println(s"matrix4.rowMap($k)->${matrix4.rowBlkMap(k)}")
-            cost2 += v.toLong * matrix4.rowBlkMap(k).toLong
+    var cost23 = 0L
+    for ((k, v) <- matrix2.colBlkMap) {
+        if (matrix3.rowBlkMap.contains(k)) {
+            cost23 += v.toLong * matrix3.rowBlkMap(k).toLong
         }
     }
-
-    if (cost1 <= cost2) {
-       res = matrix1 %*% res23 %*% matrix4
-       println("A*(B*C)*D")
+    var cost34 = 0L
+    for ((k, v) <- matrix3.colBlkMap) {
+       if (matrix4.rowBlkMap.contains(k)) {
+           cost34 += v.toLong * matrix4.rowBlkMap(k).toLong
+       }
     }
-    else {
-       res = matrix1 %*% (res23 %*% matrix4)
-       println("A*((B*C)*D)")
+    if (cost12 == math.min(math.min(cost12, cost23), cost34)) {
+        println("Performing multiplication A1*A2")
+        System.exit(1)
     }
-    println("first block size = " + res.blocks.first().toString().length)
-    val t2 = System.currentTimeMillis()
-    println("t2 - t1 = " + (t2-t1)/1000.0 + " sec" + " for A*B*C*D")
-
+    else if (cost23 == math.min(math.min(cost12, cost23), cost34)) {
+        println("Performing multiplication A2*A3")
+        val mat23 = matrix2 %*% matrix3
+        mat23.sample(0.1)
+        var cost123 = 0L
+        for ((k, v) <- matrix1.colBlkMap) {
+            if (mat23.rowBlkMap.contains(k)) {
+                cost123 += v.toLong * mat23.rowBlkMap(k).toLong
+            }
+        }
+        var cost234 = 0L
+        for ((k, v) <- mat23.colBlkMap) {
+            if (matrix4.rowBlkMap.contains(k)) {
+                cost234 += v.toLong * matrix4.rowBlkMap(k).toLong
+            }
+        }
+        if (cost123 <= cost234) {
+            println("Performing multiplication A1*(A2*A3)")
+            val res = matrix1 %*% mat23 %*% matrix4
+            res.saveAsTextFile(hdfs + "tmp_result/mult/res")
+        }
+        else {
+            println("Performing multiplication (A2*A3)*A4")
+            val res = matrix1 %*% (mat23 %*% matrix4)
+            res.saveAsTextFile(hdfs + "tmp_result/mult/res")
+        }
+    }
+    else if (cost34 == math.min(math.min(cost12, cost23), cost34)) {
+        println("Performing multiplication A3*A4")
+        val mat34 = matrix3 %*% matrix4
+        mat34.sample(0.1)
+        var cost234 = 0L
+        for ((k, v) <- matrix2.colBlkMap) {
+            if (mat34.rowBlkMap.contains(k)) {
+                cost234 += v.toLong * mat34.rowBlkMap(k).toLong
+            }
+        }
+        if (cost12 <= cost234) {
+            println("Performing multiplication (A1*A2)*(A3*A4)")
+            val res = matrix1 %*% matrix2 %*% mat34
+            res.saveAsTextFile(hdfs + "tmp_result/mult/res")
+        }
+        else {
+            println("Performing mutltiplication A2*(A3*A4)")
+            val res = matrix1 %*% (matrix2 %*% mat34)
+            res.saveAsTextFile(hdfs + "tmp_result/mutl/res")
+        }
+    }
     Thread.sleep(10000)
   }
 

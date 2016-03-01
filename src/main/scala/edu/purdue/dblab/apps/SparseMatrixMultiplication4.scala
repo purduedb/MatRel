@@ -131,9 +131,9 @@ object SparseMatrixMultiplication4 {
             res.saveAsTextFile(hdfs + "tmp_result/mult/res")
         }
         else {
-            println("Performing mutltiplication A2*(A3*A4)")
+            println("Performing multiplication A2*(A3*A4)")
             val res = matrix1 %*% (matrix2 %*% mat34)
-            res.saveAsTextFile(hdfs + "tmp_result/mutl/res")
+            res.saveAsTextFile(hdfs + "tmp_result/mult/res")
         }
     }
     Thread.sleep(10000)

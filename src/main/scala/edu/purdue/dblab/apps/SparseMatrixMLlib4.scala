@@ -12,7 +12,7 @@ object SparseMatrixMLlib4 {
       println("Usage: matrix1 row1 col1 matrix2 row2 col2 matrix3 row3 col3 matrix4 row4 col4")
       System.exit(1)
     }
-    val hdfs = "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/";
+    val hdfs = "hdfs://10.100.121.126:8022/" // "hdfs://hathi-adm.rcac.purdue.edu:8020/user/yu163/"
     val matrixName1 = hdfs + args(0)
     val (m1, n1) = (args(1).toLong, args(2).toLong)
     val matrixName2 = hdfs + args(3)
@@ -26,26 +26,23 @@ object SparseMatrixMLlib4 {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.cores.max", "64")
-      .set("spark.executor.memory", "6g")
-      .set("spark.default.parallelism", "256")
-      .set("spark.akka.frameSize", "64")
+      .set("spark.cores.max", "80")
+      .set("spark.executor.memory", "20g")
+      .set("spark.default.parallelism", "200")
+      .set("spark.akka.frameSize", "512")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
-    val coordRDD1 = genCoordinateRdd(sc, matrixName1).repartition(20)
-    val coordRDD2 = genCoordinateRdd(sc, matrixName2).repartition(20)
-    val coordRDD3 = genCoordinateRdd(sc, matrixName3).repartition(20)
-    val coordRDD4 = genCoordinateRdd(sc, matrixName4).repartition(20)
+    val coordRDD1 = genCoordinateRdd(sc, matrixName1).repartition(50)
+    val coordRDD2 = genCoordinateRdd(sc, matrixName2).repartition(50)
+    val coordRDD3 = genCoordinateRdd(sc, matrixName3).repartition(50)
+    val coordRDD4 = genCoordinateRdd(sc, matrixName4).repartition(50)
     val size = 2000
     val mat1 = new CoordinateMatrix(coordRDD1, m1, n1).toBlockMatrix(size, size)
     val mat2 = new CoordinateMatrix(coordRDD2, m2, n2).toBlockMatrix(size, size)
     val mat3 = new CoordinateMatrix(coordRDD3, m3, n3).toBlockMatrix(size, size)
     val mat4 = new CoordinateMatrix(coordRDD4, m4, n4).toBlockMatrix(size, size)
-    val t1 = System.currentTimeMillis()
     val res = mat1.multiply(mat2).multiply(mat3).multiply(mat4)
-    println("first block size = " + res.blocks.first().toString().length)
-    val t2 = System.currentTimeMillis()
-    println("t2 - t1 = " + (t2-t1)/1000.0 + "sec" + " for A*B*C*D")
+    res.blocks.saveAsTextFile(hdfs + "tmp_result/mult/res")
   }
 
   def genCoordinateRdd(sc: SparkContext, graphName: String): RDD[MatrixEntry] = {

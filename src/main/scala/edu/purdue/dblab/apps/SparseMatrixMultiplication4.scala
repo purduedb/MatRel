@@ -69,7 +69,24 @@ object SparseMatrixMultiplication4 {
     }
     if (cost12 == math.min(math.min(cost12, cost23), cost34)) {
         println("Performing multiplication A1*A2")
-        System.exit(1)
+        val mat12 = matrix1 %*% matrix2
+        mat12.sample(0.1)
+        var cost123 = 0L
+        for ((k, v) <- mat12.colBlkMap) {
+            if (matrix3.rowBlkMap.contains(k)) {
+                cost123 += v.toLong * matrix3.rowBlkMap(k).toLong
+            }
+        }
+        if (cost123 <= cost34) {
+            println("Performing multiplication (A1*A2)*A3")
+            val res = mat12 %*% matrix3 %*% matrix4
+            res.saveAsTextFile(hdfs + "tmp_result/mult/res")
+        }
+        else {
+            println("Performing multiplication A3*A4")
+            val res = mat12 %*% (matrix3 * matrix4)
+            res.saveAsTextFile(hdfs + "tmp_result/mult/res")
+        }
     }
     else if (cost23 == math.min(math.min(cost12, cost23), cost34)) {
         println("Performing multiplication A2*A3")

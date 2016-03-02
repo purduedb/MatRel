@@ -46,35 +46,25 @@ object MatixChainMultiplication4 {
         val matrix4 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD4, blkSize, blkSize, m4, n4)
         plan match {
             case 1 =>
-                val t1 = System.currentTimeMillis()
                 val res1 = matrix1 %*% matrix2 %*% matrix3 %*% matrix4
                 res1.saveAsTextFile(hdfs + "tmp_result/mult/res1")
-                val t2 = System.currentTimeMillis()
-                println("t2 - t1 = " + (t2 - t1)/1000.0 + " sec for ((A1*A2)*A3)*A4")
+                println("Plan for ((A1*A2)*A3)*A4")
             case 2 =>
-                val t1 = System.currentTimeMillis()
                 val res2 = (matrix1 %*% (matrix2 %*% matrix3)) %*% matrix4
                 res2.saveAsTextFile(hdfs + "tmp_result/mult/res2")
-                val t2 = System.currentTimeMillis()
-                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for (A1*(A2*A3))*A4")
+                println("Plan for (A1*(A2*A3))*A4")
             case 3 =>
-                val t1 = System.currentTimeMillis()
                 val res3 = matrix1 %*% (matrix2 %*% matrix3 %*% matrix4)
                 res3.saveAsTextFile(hdfs + "tmp_result/mult/res3")
-                val t2 = System.currentTimeMillis()
-                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for A1*(A2*A3*A4)")
+                println("Plan for A1*(A2*A3*A4)")
             case 4 =>
-                val t1 = System.currentTimeMillis()
                 val res4 = matrix1 %*% (matrix2 %*% (matrix3 %*% matrix4))
                 res4.saveAsTextFile(hdfs + "tmp_result/mult/res4")
-                val t2 = System.currentTimeMillis()
-                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for A1*(A2*(A3*A4))")
+                println("Plan for A1*(A2*(A3*A4))")
             case 5 =>
-                val t1 = System.currentTimeMillis()
                 val res5 = (matrix1 %*% matrix2) %*% (matrix3 %*% matrix4)
                 res5.saveAsTextFile(hdfs + "tmp_result/mult/res5")
-                val t2 = System.currentTimeMillis()
-                println("t2 - t1 = " + (t2-t1)/1000.0 + " sec for (A1*A2)*(A3*A4)")
+                println("Plan for (A1*A2)*(A3*A4)")
             case _ =>
                 throw new SparkException("planNo. out of range!")
         }

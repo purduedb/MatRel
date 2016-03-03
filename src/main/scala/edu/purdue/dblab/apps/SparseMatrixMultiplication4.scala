@@ -45,10 +45,10 @@ object SparseMatrixMultiplication4 {
     val matrix3 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD3, size, size, m3, n3)
     val matrix4 = BlockPartitionMatrix.createFromCoordinateEntries(coordRDD4, size, size, m4, n4)
     // sample among A1, A2, A3, and A4 to decide which multiplication should be done first
-    matrix1.sample(0.1)
-    matrix2.sample(0.1)
-    matrix3.sample(0.1)
-    matrix4.sample(0.1)
+    matrix1.sample(0.01)
+    matrix2.sample(0.01)
+    matrix3.sample(0.01)
+    matrix4.sample(0.01)
     var cost12 = 0L
     for ((k, v) <- matrix1.colBlkMap) {
         if (matrix2.rowBlkMap.contains(k)) {

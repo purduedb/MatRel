@@ -1067,6 +1067,28 @@ def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMa
             rowBlkMap(elem._1) = elem._2
         }
     }
+
+    // this method implements the rank-1 update for an existing matrix
+    // without explicitly materializing the matrix
+    // A = A + xx^T
+    def rankOneUpdate(vec: BlockPartitionMatrix): BlockPartitionMatrix = {
+        require(vec.nCols() == 1, "Vector column size is not 1")
+        require(this.nrows == vec.nRows() && this.ncols ==  vec.nRows(),
+            s"Dimension not match for matrix addition, A.nrows = ${this.nrows}, " +
+            s"A.ncols = ${this.ncols}, B.nrows = ${vec.nRows()}, B.ncols = ${vec.nRows()}")
+        val numPartitions = blocks.partitions.length
+        val dupRDD = duplicateCrossPartitions(vec.blocks, numPartitions)
+        val RDD = blocks.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
+            val dup = iter2.next()._2
+            for {
+                x1 <- iter1
+                x2 <- dup
+                x3 <- dup
+                if (x1._1._1 == x2._1._1 && x1._1._2 == x3._1._1)
+            } yield (x1._1, LocalMatrix.rankOneAdd(x1._2, x2._2, x3._2))
+        }
+        new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
+    }
 }
 
 object BlockPartitionMatrix {
@@ -1387,13 +1409,13 @@ object TestBlockPartition {
              411   411   411   612   612   612
          */
         //println((matx %*% maty).toLocalMatrix())
-        println((mato1 %*% mato2).toLocalMatrix())
+        //println((mato1 %*% mato2).toLocalMatrix())
 
-        val denseBlkMat = BlockPartitionMatrix.createDenseBlockMatrix(sc,
+        /*val denseBlkMat = BlockPartitionMatrix.createDenseBlockMatrix(sc,
             "/Users/yongyangyu/Desktop/krux-master-dev/test/mrna.tab.tmp", 3,6,10,10)
         println(denseBlkMat.toLocalMatrix())
         val zMat = BlockPartitionMatrix.zeros()
-        println((zMat + denseBlkMat).toLocalMatrix())
+        println((zMat + denseBlkMat).toLocalMatrix())*/
         /*val mat = List[(Long, Long)]((0, 0), (0,1), (0,2), (0,3), (0, 4), (0, 5), (1, 0), (1, 2),
             (2, 3), (2, 4), (3,1), (3,2), (3, 4), (4, 5), (5, 4))
         val CooRdd = sc.parallelize(mat, 2).map(x => Entry(x._1, x._2, 1.0))
@@ -1410,6 +1432,10 @@ object TestBlockPartition {
             //x = matrix.multiply(x).multiplyScalar(alpha).add(v.multiplyScalar(1-alpha), (3,3))
         }
         println(x.toLocalMatrix())*/
+        println(mat1.toLocalMatrix())
+        println(matx.toLocalMatrix())
+        val rank1 = mat1.rankOneUpdate(matx)
+        println(rank1.toLocalMatrix())
         sc.stop()
     }
 }

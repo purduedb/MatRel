@@ -1031,6 +1031,18 @@ object LocalMatrix {
         }
         new DenseMatrix(nrows, ncols, arr)
     }
+
+    def rankOneAdd(mat1: MLMatrix, mat2: MLMatrix, mat3: MLMatrix): MLMatrix = {
+        val arr1 = mat1.toArray
+        val arr = Array.fill(arr1.length)(0.0)
+        for (i <- 0 until mat1.numRows) {
+            for (j <- 0 until mat1.numCols) {
+                val k = mat1.index(i, j)
+                arr(k) = arr1(k) + mat2(i, 0) * mat3(j, 0)
+            }
+        }
+        new DenseMatrix(mat1.numRows, mat1.numCols, arr)
+    }
 }
 
 object TestSparse {

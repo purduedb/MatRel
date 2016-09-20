@@ -37,8 +37,18 @@ object BFGSNetflix {
       val blkSize = BlockPartitionMatrix.estimateBlockSizeWithDim(nrows, ncols)
       val V = BlockPartitionMatrix.createFromCoordinateEntries(genCOORdd(sc,
         matrixName), blkSize, blkSize, nrows, ncols).cache()
-      var W = BlockPartitionMatrix.randMatrix(sc, nrows, ntopics, blkSize).partitionBy(new RowPartitioner(64))
-      var H = BlockPartitionMatrix.randMatrix(sc, ntopics, ncols, blkSize).partitionBy(new ColumnPartitioner(64))
+      val W1 = BlockPartitionMatrix.randMatrix(sc, nrows, ntopics, blkSize).partitionBy(new RowPartitioner(64))
+      val H1 = BlockPartitionMatrix.randMatrix(sc, ntopics, ncols, blkSize).partitionBy(new ColumnPartitioner(64))
+      val gradient1 = computeGradient(V, W1, H1)
+      val W2 = BlockPartitionMatrix.randMatrix(sc, nrows, ntopics, blkSize).partitionBy(new RowPartitioner(64))
+      val H2 = BlockPartitionMatrix.randMatrix(sc, ntopics, ncols, blkSize).partitionBy(new ColumnPartitioner(64))
+      val gradient2 = computeGradient(V, W2, H2)
+      val s = gradient1 * (-1)
+      val y = gradient2 + (gradient1 * (-1))
+      var B = BlockPartitionMatrix.randMatrix(sc, gradient1.nRows(), gradient2.nRows(), blkSize)
+      B = B + y %*% y.t + (B %*% s %*% s.t %*% B) * (-1)
+      B.saveAsTextFile(hdfs + "tmp_result/gnmf/B")
+      Thread.sleep(10000)
   }
 
   def genCOORdd(sc: SparkContext, matrixName: String): RDD[Entry] = {
@@ -49,10 +59,14 @@ object BFGSNetflix {
       }
   }
 
-
-  /*def computeDerivative(V: BlockPartitionMatrix, W: BlockPartitionMatrix,
+  def computeGradient(V: BlockPartitionMatrix, W: BlockPartitionMatrix,
                         H: BlockPartitionMatrix): BlockPartitionMatrix = {
       val dW = ((V + ((W %*% H) * (-1))) %*% H.t) * (-2) + (W * 2)
       val dH = (W.t %*% (V + (W %*% H) * (-1))) * (-2) + (H * 2)
-  }*/
+      val Wvec = dW.vec().cache()
+      val Hvec = dH.vec().cache()
+      val WSize = Wvec.blocks.map { case ((i, j), mat) => i}.max() + 1
+      val RDD = Hvec.blocks.map { case ((i, j), mat) => ((i+WSize, j), mat)}.union(Wvec.blocks)
+      new BlockPartitionMatrix(RDD, V.ROWS_PER_BLK, V.COLS_PER_BLK, Wvec.nRows() + Hvec.nRows(), 1)
+  }
 }

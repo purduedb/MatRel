@@ -65,7 +65,7 @@ object BFGSNetflix {
       val dH = (W.t %*% (V + (W %*% H) * (-1))) * (-2) + (H * 2)
       val Wvec = dW.vec().cache()
       val Hvec = dH.vec().cache()
-      val WSize = Wvec.blocks.map { case ((i, j), mat) => i}.max() + 1
+      val WSize = Wvec.blocks.map { case ((i, j), mat) => i}.max()
       val RDD = Hvec.blocks.map { case ((i, j), mat) => ((i+WSize, j), mat)}.union(Wvec.blocks)
       new BlockPartitionMatrix(RDD, V.ROWS_PER_BLK, V.COLS_PER_BLK, Wvec.nRows() + Hvec.nRows(), 1)
   }

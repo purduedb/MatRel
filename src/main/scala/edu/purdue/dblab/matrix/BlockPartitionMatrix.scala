@@ -1089,6 +1089,27 @@ def mergeCombiner(c1 : ArrayBuffer[(MLMatrix, MLMatrix)], c2 : ArrayBuffer[(MLMa
         }
         new BlockPartitionMatrix(RDD, ROWS_PER_BLK, COLS_PER_BLK, nRows(), nCols())
     }
+
+    // vec() function to stack the elements of a matrix in the column fashion
+    def vec(): BlockPartitionMatrix = {
+        val blkSize = ROWS_PER_BLK
+        val RDD = blocks.flatMap{ case ((i, j), mat) =>
+            val arr = mat.toArray
+            val numLocalRows = mat.numRows
+            val numLocalCols = mat.numCols
+            val buffer = ArrayBuffer[((Int, Int), MLMatrix)]()
+            for (t <- 0 until numLocalCols) {
+                val key = (j * ROW_BLK_NUM * blkSize + t * ROW_BLK_NUM + i, 0)
+                val vecArray = new Array[Double](numLocalRows)
+                for (i <- 0 until numLocalRows) {
+                    vecArray(i) = arr(t * numLocalCols + i)
+                }
+                buffer.append((key, new DenseMatrix(vecArray.length, 1, vecArray)))
+            }
+            buffer
+        }
+        new BlockPartitionMatrix(RDD, blkSize, blkSize, nRows()*nCols(), 1)
+    }
 }
 
 object BlockPartitionMatrix {
@@ -1436,6 +1457,7 @@ object TestBlockPartition {
         println(matx.toLocalMatrix())
         val rank1 = mat1.rankOneUpdate(matx)
         println(rank1.toLocalMatrix())
+        println(rank1.vec().toLocalMatrix())
         sc.stop()
     }
 }

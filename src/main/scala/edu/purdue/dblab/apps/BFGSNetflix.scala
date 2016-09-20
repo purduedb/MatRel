@@ -49,6 +49,7 @@ object BFGSNetflix {
       }
   }
 
+
   /*def computeDerivative(V: BlockPartitionMatrix, W: BlockPartitionMatrix,
                         H: BlockPartitionMatrix): BlockPartitionMatrix = {
       val dW = ((V + ((W %*% H) * (-1))) %*% H.t) * (-2) + (W * 2)

@@ -55,7 +55,7 @@ object BFGSNetflix {
       val lines = sc.textFile(matrixName, 8)
       lines.map { s =>
           val line = s.split("\\s+")
-          Entry(line(0).toLong - 1, line(1).toLong, line(2).toDouble)
+          Entry(line(0).toLong - 1, line(1).toLong - 1, line(2).toDouble)
       }
   }
 

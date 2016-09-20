@@ -6,9 +6,9 @@ import org.apache.spark.{SparkContext, SparkConf}
 /**
   * Created by yongyangyu on 9/19/16.
   * This app executes BFGS computation on the Netflix dataset.
-  * f(W, H) = ||V - WH||_F^2 + ||W||_F^2 + ||H||_F^2
-  * the derivative of W, df(W, H)/dW = -2(V - WH)H^T + 2W,
-  * and the derivative of H, df(W, H)/dH = -2W^T(V - WH) + 2H.
+  * f(W, H) = ||V - WH||_F + ||W||_F + ||H||_F
+  * the derivative of W, df(W, H)/dW = -2(V - WH)H.T + 2W,
+  * and the derivative of H, df(W, H)/dH = -2W.T(V - WH) + 2H.
   * To leverage BFGS, we need to stack the derivatives in a long vector.
   */
 object BFGSNetflix {

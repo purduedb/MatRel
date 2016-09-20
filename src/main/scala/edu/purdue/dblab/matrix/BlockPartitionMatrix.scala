@@ -381,10 +381,10 @@ class BlockPartitionMatrix (
 
     def +(other: BlockPartitionMatrix): BlockPartitionMatrix = {
         if (blocks != null && other.blocks != null) {
-            if (blocks.partitioner.get != null) {
+            if (blocks.partitioner.get != None) {
                 add(other, (ROWS_PER_BLK, COLS_PER_BLK), blocks.partitioner.get)
             }
-            else if (other.blocks.partitioner.get != null) {
+            else if (other.blocks.partitioner.get != None) {
                 add(other, (ROWS_PER_BLK, COLS_PER_BLK), other.blocks.partitioner.get)
             }
             else {

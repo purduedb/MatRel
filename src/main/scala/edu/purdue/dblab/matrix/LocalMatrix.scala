@@ -1033,12 +1033,20 @@ object LocalMatrix {
     }
 
     def rankOneAdd(mat1: MLMatrix, mat2: MLMatrix, mat3: MLMatrix): MLMatrix = {
-        val arr1 = mat1.toArray
+        val arr1 = Array.fill(mat1.numRows * mat1.numCols)(0.0)
         val arr = Array.fill(arr1.length)(0.0)
         for (i <- 0 until mat1.numRows) {
             for (j <- 0 until mat1.numCols) {
                 val k = mat1.index(i, j)
-                arr(k) = arr1(k) + mat2(i, 0) * mat3(j, 0)
+                if (k >= 0) {
+                    arr(k) = arr1(k) + mat2(i, 0) * mat3(j, 0)
+                } else {
+                    if (!mat1.isTransposed) {
+                        arr(i + mat1.numRows * j) = mat2(i, 0) * mat3(j, 0)
+                    } else {
+                        arr(j + mat1.numCols * i) = mat2(i, 0) * mat3(j, 0)
+                    }
+                }
             }
         }
         new DenseMatrix(mat1.numRows, mat1.numCols, arr)

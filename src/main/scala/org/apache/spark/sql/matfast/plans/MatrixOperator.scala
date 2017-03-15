@@ -18,6 +18,10 @@ case class MatrixScalarMultiplyOperator(child: LogicalPlan, scalar: Double) exte
   override def output: Seq[Attribute] = child.output
 }
 
+case class MatrixPowerOperator(child: LogicalPlan, scalar: Double) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class MatrixElementAddOperator(leftChild: LogicalPlan,
                                     leftRowNum: Long,
                                     leftColNum: Long,

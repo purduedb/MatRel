@@ -15,8 +15,8 @@ object BasicMatrixOps {
                                      .appName("SparkSessionForMatfast")
                                      .getOrCreate()
     //runMatrixTranspose(matfastSession)
-    //runMatrixScalar(matfastSession)
-    runMatrixElement(matfastSession)
+    runMatrixScalar(matfastSession)
+    //runMatrixElement(matfastSession)
     matfastSession.stop()
   }
 
@@ -46,7 +46,7 @@ object BasicMatrixOps {
     val s1 = new SparseMatrix(2,2,Array[Int](0,1,2),Array[Int](1,0),Array[Double](4,2))
     val seq = Seq(MatrixBlock(0, 2, b1), MatrixBlock(1, 3, s1)).toDS()
     import spark.MatfastImplicits._
-    seq.multiplyScalar(10).rdd.foreach { row =>
+    seq.power(2).rdd.foreach { row =>
       println(row.get(2).asInstanceOf[MLMatrix])
     }
   }

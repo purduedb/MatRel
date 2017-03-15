@@ -3,13 +3,10 @@ package org.apache.spark.sql.matfast.execution
 import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.util._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.Partitioner
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
 import org.apache.spark.sql.execution.{SparkPlan}
-import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, RowPartitioner}
-
-import scala.collection.concurrent.TrieMap
+import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner}
 
 /**
   * Created by yongyangyu on 2/28/17.
@@ -75,6 +72,29 @@ case class MatrixScalarMultiplyExecution(child: SparkPlan, alpha: Double) extend
       val res = new GenericInternalRow(3)
       val matrix = MLMatrixSerializer.deserialize(matrixInternalRow)
       val matrixRow = MLMatrixSerializer.serialize(LocalMatrix.multiplyScalar(alpha, matrix))
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, matrixRow)
+      res
+    }
+  }
+}
+
+case class MatrixPowerExecution(child: SparkPlan, alpha: Double) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      val res = new GenericInternalRow(3)
+      val matrix = MLMatrixSerializer.deserialize(matrixInternalRow)
+      val matrixRow = MLMatrixSerializer.serialize(LocalMatrix.matrixPow(matrix, alpha))
       res.setInt(0, rid)
       res.setInt(1, cid)
       res.update(2, matrixRow)

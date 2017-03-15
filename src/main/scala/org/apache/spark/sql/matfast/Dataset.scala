@@ -33,6 +33,10 @@ class Dataset[T] private[matfast]
     MatrixScalarMultiplyOperator(this.logicalPlan, alpha)
   }
 
+  def power(alpha: Double, data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    MatrixPowerOperator(this.logicalPlan, alpha)
+  }
+
   def addElement(leftRowNum: Long, leftColNum: Long,
                  right: DataFrame,
                  rightRowNum: Long, rightColNum: Long,

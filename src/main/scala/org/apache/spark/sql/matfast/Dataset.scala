@@ -69,6 +69,14 @@ class Dataset[T] private[matfast]
     MatrixMatrixMultiplicationOperator(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
   }
 
+  def matrixRankOneUpdate(leftRowNum: Long, leftColNum: Long,
+                          right: DataFrame,
+                          rightRowNum: Long, rightColNum: Long,
+                          blkSize: Int,
+                          data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RankOneUpdateOperator(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+  }
+
   private def getAttributes(keys: Array[String],
                             attrs: Seq[Attribute] = this.queryExecution.analyzed.output): Array[Attribute] = {
     keys.map(key => {

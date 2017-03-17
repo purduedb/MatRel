@@ -235,4 +235,25 @@ object MatfastExecutionHelper {
               res
             }
   }
+
+  def matrixRankOneUpdate(rdd1: RDD[InternalRow], rdd2: RDD[InternalRow]): RDD[InternalRow] = {
+    val numPartitions = rdd1.partitions.length
+    val dupRdd = duplicateCrossPartitions(rdd2, numPartitions)
+    rdd1.zipPartitions(dupRdd, preservesPartitioning = true) { (iter1, iter2) =>
+      val dup = iter2.next()._2
+      for {
+        x1 <- iter1
+        x2 <- dup
+        x3 <- dup
+        if (x1.getInt(0) == x2.rid && x1.getInt(1) == x3.rid)
+      } yield (x1.getInt(0), x1.getInt(1),
+        LocalMatrix.rankOneAdd(MLMatrixSerializer.deserialize(x1.getStruct(2, 7)), x2.matrix, x3.matrix))
+    }.map { row =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, row._1)
+      res.setInt(1, row._2)
+      res.update(2, MLMatrixSerializer.serialize(row._3))
+      res
+    }
+  }
 }

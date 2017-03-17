@@ -239,3 +239,23 @@ case class MatrixMatrixMultiplicationExecution(left: SparkPlan,
     }
   }
 }
+
+case class RankOneUpdateExecution(left: SparkPlan,
+                                  leftRowNum: Long,
+                                  leftColNum: Long,
+                                  right: SparkPlan,
+                                  rightRowNum: Long,
+                                  rightColNum: Long,
+                                  blkSize: Int) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = left.output
+
+  override def children: Seq[SparkPlan] = Seq(left, right)
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    require(rightRowNum == 1, s"Vector column size is not 1, but #cols = $rightRowNum")
+    require(leftRowNum == rightRowNum, s"Dimension not match for matrix addition, A.nrows = $leftRowNum, " +
+    s"A.ncols = ${leftColNum}, B.nrows = $rightRowNum, B.ncols = $rightColNum")
+    MatfastExecutionHelper.matrixRankOneUpdate(left.execute(), right.execute())
+  }
+}

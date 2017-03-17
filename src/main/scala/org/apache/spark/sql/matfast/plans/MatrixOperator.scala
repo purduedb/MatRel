@@ -77,3 +77,20 @@ case class MatrixMatrixMultiplicationOperator(leftChild: LogicalPlan,
 
   override def right: LogicalPlan = rightChild
 }
+
+// this class implements rank-1 update for an existing matrix
+// without explicitly materializing the intermediate matrix of vector outer-product
+case class RankOneUpdateOperator(leftChild: LogicalPlan,
+                                 leftRowNum: Long,
+                                 leftColNum: Long,
+                                 rightChild: LogicalPlan,
+                                 rightRowNum: Long,
+                                 rightColNum: Long,
+                                 blkSize: Int) extends BinaryNode {
+
+  override def output: Seq[Attribute] = leftChild.output
+
+  override def left: LogicalPlan = leftChild
+
+  override def right: LogicalPlan = rightChild
+}

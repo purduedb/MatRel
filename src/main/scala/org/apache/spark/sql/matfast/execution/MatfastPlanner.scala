@@ -39,6 +39,8 @@ object MatrixOperators extends Strategy {
       MatrixElementMultiplyExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
     case MatrixElementDivideOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
       MatrixElementDivideExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+    case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+      MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
     case _ => Nil
   }
 }

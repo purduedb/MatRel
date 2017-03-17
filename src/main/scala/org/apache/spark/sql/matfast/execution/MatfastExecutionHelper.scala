@@ -4,8 +4,8 @@ import org.apache.spark.Partitioner
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
-import org.apache.spark.sql.matfast.matrix.LocalMatrix
-import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, RowPartitioner}
+import org.apache.spark.sql.matfast.matrix.{LocalMatrix, MatrixBlock}
+import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, IndexPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
 
 import scala.collection.concurrent.TrieMap
@@ -149,5 +149,90 @@ object MatfastExecutionHelper {
       res.update(2, matrix)
       res
     }
+  }
+
+  def multiplyOuterProductDuplicateLeft(rdd1: RDD[InternalRow], rdd2: RDD[InternalRow]): RDD[InternalRow] = {
+    val numPartitions = rdd2.partitions.length
+    val rightRDD = repartitionWithTargetPartitioner(new ColumnPartitioner(numPartitions), rdd2)
+    val dupRDD = duplicateCrossPartitions(rdd1, numPartitions)
+    dupRDD.zipPartitions(rightRDD, preservesPartitioning = true) { (iter1, iter2) =>
+      val dup = iter1.next()._2
+      for {
+        x2 <- iter2
+        x1 <- dup
+      } yield ((x1.rid, x2._1._2), LocalMatrix.matrixMultiplication(x1.matrix, MLMatrixSerializer.deserialize(x2._2)))
+    }.map { row =>
+      val rid = row._1._1
+      val cid = row._1._2
+      val matrix = row._2
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(3, MLMatrixSerializer.serialize(matrix))
+      res
+    }
+  }
+
+  def multiplyOuterProductDuplicateRight(rdd1: RDD[InternalRow], rdd2: RDD[InternalRow]): RDD[InternalRow] = {
+    val numPartitions = rdd1.partitions.length
+    val leftRDD = repartitionWithTargetPartitioner(new RowPartitioner(numPartitions), rdd1)
+    val dupRDD = duplicateCrossPartitions(rdd2, numPartitions)
+    leftRDD.zipPartitions(dupRDD, preservesPartitioning = true) { (iter1, iter2) =>
+      val dup = iter2.next()._2
+      for {
+        x1 <- iter1
+        x2 <- dup
+      } yield ((x1._1._1, x2.cid), LocalMatrix.matrixMultiplication(MLMatrixSerializer.deserialize(x1._2), x2.matrix))
+    }.map { row =>
+      val rid = row._1._1
+      val cid = row._1._2
+      val matrix = row._2
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(matrix))
+      res
+    }
+  }
+
+  // duplicate the matrix for #partitions copies and distribute them over the cluster
+  private def duplicateCrossPartitions(rdd: RDD[InternalRow], numPartitions: Int): RDD[(Int, Iterable[MatrixBlock])] = {
+    rdd.flatMap { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      for (i <- 0 until numPartitions)
+        yield (i, MatrixBlock(rid, cid, matrix))
+    }.groupByKey(new IndexPartitioner(numPartitions))
+  }
+
+  def matrixMultiplyGeneral(rdd1: RDD[InternalRow], rdd2: RDD[InternalRow]): RDD[InternalRow] = {
+    val leftRdd = rdd1.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      (cid, (rid, matrixInternalRow))
+    }.groupByKey()
+    val rightRdd = rdd2.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      (rid, (cid, matrixInternalRow))
+    }.groupByKey()
+    leftRdd.join(rightRdd)
+           .values
+           .flatMap { case (iter1, iter2) =>
+               for (blk1 <- iter1; blk2 <- iter2)
+                 yield ((blk1._1, blk2._1),
+                   LocalMatrix.matrixMultiplication(MLMatrixSerializer.deserialize(blk1._2),
+                     MLMatrixSerializer.deserialize(blk2._2)))
+           }.reduceByKey(LocalMatrix.add(_, _))
+            .map { row =>
+              val res = new GenericInternalRow(3)
+              res.setInt(0, row._1._1)
+              res.setInt(1, row._1._2)
+              res.update(2, MLMatrixSerializer.serialize(row._2))
+              res
+            }
   }
 }

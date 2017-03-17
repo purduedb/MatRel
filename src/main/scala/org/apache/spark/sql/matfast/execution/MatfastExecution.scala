@@ -204,3 +204,38 @@ case class MatrixElementDivideExecution(left: SparkPlan,
     }
   }
 }
+
+case class MatrixMatrixMultiplicationExecution(left: SparkPlan,
+                                               leftRowNum: Long,
+                                               leftColNum: Long,
+                                               right: SparkPlan,
+                                               rightRowNum: Long,
+                                               rightColNum: Long,
+                                               blkSize: Int) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = left.output
+
+  override def children: Seq[SparkPlan] = Seq(left, right)
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    // check for multiplication possibility
+    require(leftColNum == rightRowNum, s"Matrix dimension not match, leftColNum = $leftColNum, rightRowNum = $rightRowNum")
+    // estimate memory usage
+    val memoryUsage = leftRowNum * rightColNum * 8 / (1024 * 1024 * 1024) * 1.0
+    if (memoryUsage > 10) println(s"Caution: matrix multiplication result size = $memoryUsage GB")
+    // compute number of row/col blocks for invoking special matrix multiplication procedure
+    val leftColBlkNum = math.ceil(leftColNum * 1.0 / blkSize).toInt
+    val rightRowBlkNum = math.ceil(rightRowNum * 1.0 / blkSize).toInt
+    if (leftColBlkNum == 1 && rightRowBlkNum == 1) {
+      val leftRowBlkNum = leftRowNum / blkSize
+      val rightColBlkNum = rightColNum / blkSize
+      if (leftRowBlkNum <= rightColBlkNum) {
+        MatfastExecutionHelper.multiplyOuterProductDuplicateLeft(left.execute(), right.execute())
+      } else {
+        MatfastExecutionHelper.multiplyOuterProductDuplicateRight(left.execute(), right.execute())
+      }
+    } else {
+      MatfastExecutionHelper.matrixMultiplyGeneral(left.execute(), right.execute())
+    }
+  }
+}

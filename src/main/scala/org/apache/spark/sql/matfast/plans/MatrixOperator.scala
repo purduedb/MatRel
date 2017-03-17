@@ -22,6 +22,11 @@ case class MatrixPowerOperator(child: LogicalPlan, scalar: Double) extends Unary
   override def output: Seq[Attribute] = child.output
 }
 
+// stack the elements of a matrix in a column fashion
+case class VectorizeOperator(child: LogicalPlan, nrows: Long, ncols: Long, blkSize: Int) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class MatrixElementAddOperator(leftChild: LogicalPlan,
                                     leftRowNum: Long,
                                     leftColNum: Long,

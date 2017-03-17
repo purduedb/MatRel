@@ -7,6 +7,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
 import org.apache.spark.sql.execution.{SparkPlan}
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner}
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * Created by yongyangyu on 2/28/17.
@@ -98,6 +99,42 @@ case class MatrixPowerExecution(child: SparkPlan, alpha: Double) extends Matfast
       res.setInt(0, rid)
       res.setInt(1, cid)
       res.update(2, matrixRow)
+      res
+    }
+  }
+}
+
+case class VectorizeExecution(child: SparkPlan, nrows: Long, ncols: Long, blkSize: Int) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd = child.execute()
+    val ROW_BLK_NUM = math.ceil(nrows * 1.0 / blkSize).toInt
+    rdd.flatMap { row =>
+      val i = row.getInt(0)
+      val j = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val arr = matrix.toArray
+      val numLocalRows = matrix.numRows
+      val numLocalCols = matrix.numCols
+      val buffer = ArrayBuffer[((Int, Int), MLMatrix)]()
+      for (t <- 0 until numLocalCols) {
+        val key = (j * ROW_BLK_NUM * blkSize + t * ROW_BLK_NUM + i, 0)
+        val vecArray = new Array[Double](numLocalRows)
+        for (k <- 0 until numLocalRows) {
+          vecArray(k) = arr(t * numLocalCols + k)
+        }
+        buffer.append((key, new DenseMatrix(vecArray.length, 1, vecArray)))
+      }
+      buffer
+    }.map { row =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, row._1._1)
+      res.setInt(1, row._1._2)
+      res.update(2, MLMatrixSerializer.serialize(row._2))
       res
     }
   }

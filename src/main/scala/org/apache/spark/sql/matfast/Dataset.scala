@@ -25,6 +25,11 @@ class Dataset[T] private[matfast]
     TranposeOperator(this.logicalPlan)
   }
 
+  def vec(nrows: Long, ncols: Long, blkSize: Int,
+          data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    VectorizeOperator(this.logicalPlan, nrows, ncols, blkSize)
+  }
+
   def addScalar(alpha: Double, data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     MatrixScalarAddOperator(this.logicalPlan, alpha)
   }

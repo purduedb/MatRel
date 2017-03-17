@@ -33,6 +33,8 @@ object MatrixOperators extends Strategy {
       MatrixScalarMultiplyExecution(planLater(left), right) :: Nil
     case MatrixPowerOperator(left, right) =>
       MatrixPowerExecution(planLater(left), right) :: Nil
+    case VectorizeOperator(child, nrows, ncols, blkSize) =>
+      VectorizeExecution(planLater(child), nrows, ncols, blkSize) :: Nil
     case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
       MatrixElementAddExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
     case MatrixElementMultiplyOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>

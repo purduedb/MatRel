@@ -16,7 +16,7 @@ import scala.collection.immutable
 /**
   * A class that holds all session-specific state in a given [[SparkSession]] backed by Simba.
   */
-private[matfast] class MatfastSessionState (sparkSession: SparkSession) extends SessionState(sparkSession){
+private[matfast] class MatfastSessionState (matfastSession: MatfastSession) extends SessionState(matfastSession){
   self =>
 
   protected[matfast] lazy val matfastConf = new MatfastConf
@@ -29,11 +29,11 @@ private[matfast] class MatfastSessionState (sparkSession: SparkSession) extends 
     * Planner that takes into account spatial opt strategies.
     */
   protected[matfast] val matfastPlanner: sparkexecution.SparkPlanner = {
-    new MatfastPlanner(sparkSession, conf, experimentalMethods.extraStrategies)
+    new MatfastPlanner(matfastSession, conf, experimentalMethods.extraStrategies)
   }
 
   override def executePlan(plan: LogicalPlan) =
-    new execution.QueryExecution(sparkSession, plan)
+    new execution.QueryExecution(matfastSession, plan)
 
   def setConf(key: String, value: String): Unit = {
     if (key.startsWith("matfast.")) matfastConf.setConfString(key, value)

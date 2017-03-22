@@ -1,6 +1,6 @@
 package org.apache.spark.sql.matfast.execution
 
-import org.apache.spark.sql.matfast.SparkSession
+import org.apache.spark.sql.matfast.MatfastSession
 import org.apache.spark.sql.matfast.execution._
 import org.apache.spark.sql.matfast.plans._
 import org.apache.spark.internal.Logging
@@ -15,7 +15,7 @@ import org.apache.spark.sql.internal.SQLConf
 /**
   * Created by yongyangyu on 11/29/16.
   */
-class MatfastPlanner(val matfastContext: SparkSession,
+class MatfastPlanner(val matfastContext: MatfastSession,
                      override val conf: SQLConf,
                      override val extraStrategies: Seq[Strategy])
   extends SparkPlanner(matfastContext.sparkContext, conf, extraStrategies) {

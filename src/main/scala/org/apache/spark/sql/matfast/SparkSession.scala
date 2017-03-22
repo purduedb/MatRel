@@ -6,7 +6,6 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.annotation.InterfaceStability
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationEnd}
-import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.execution.ui.SQLListener
 import org.apache.spark.sql.internal.SessionState
 import org.apache.spark.sql.internal.StaticSQLConf._
@@ -20,7 +19,7 @@ import scala.util.control.NonFatal
 /**
   * Created by yongyangyu on 2/17/17.
   */
-class SparkSession private[matfast]
+class MatfastSession private[matfast]
 (@transient override val sparkContext: SparkContext) extends SParkSparkSession(sparkContext)
 {
   self =>
@@ -35,7 +34,7 @@ class SparkSession private[matfast]
   }
 
   object MatfastImplicits extends Serializable {
-    protected[matfast] def _matfastContext: SparkSession = self
+    protected[matfast] def _matfastContext: MatfastSession = self
 
     implicit def datasetToMatfastDataSet[T : Encoder](df: SparkDataSet[T]): Dataset[T] =
       Dataset(self, df.queryExecution.logical)
@@ -43,9 +42,9 @@ class SparkSession private[matfast]
 }
 
 @InterfaceStability.Stable
-object SparkSession {
+object MatfastSession {
   /**
-    * Builder for [[SparkSession]].
+    * Builder for [[MatfastSession]].
     */
   @InterfaceStability.Stable
   class Builder extends Logging {
@@ -146,7 +145,7 @@ object SparkSession {
     }
 
     /**
-      * Gets an existing [[SparkSession]] or, if there is no existing one, creates a new
+      * Gets an existing [[MatfastSession]] or, if there is no existing one, creates a new
       * one based on the options set in this builder.
       *
       * This method first checks whether there is a valid thread-local SparkSession,
@@ -160,7 +159,7 @@ object SparkSession {
       *
       * @since 2.0.0
       */
-    def getOrCreate(): SparkSession = synchronized {
+    def getOrCreate(): MatfastSession = synchronized {
       // Get the session from current thread's active session.
       var session = activeThreadSession.get()
       if ((session ne null) && !session.sparkContext.isStopped) {
@@ -172,7 +171,7 @@ object SparkSession {
       }
 
       // Global synchronization so we will only set the default session once.
-      SparkSession.synchronized {
+      MatfastSession.synchronized {
         // If the current thread does not have an active session, get it from the global session.
         session = defaultSession.get()
         if ((session ne null) && !session.sparkContext.isStopped) {
@@ -201,7 +200,7 @@ object SparkSession {
           }
           sc
         }
-        session = new SparkSession(sparkContext)
+        session = new MatfastSession(sparkContext)
         options.foreach { case (k, v) => session.sessionState.conf.setConfString(k, v) }
         defaultSession.set(session)
 
@@ -221,7 +220,7 @@ object SparkSession {
   }
 
   /**
-    * Creates a [[SparkSession.Builder]] for constructing a [[SparkSession]].
+    * Creates a [[MatfastSession.Builder]] for constructing a [[MatfastSession]].
     *
     * @since 2.0.0
     */
@@ -234,7 +233,7 @@ object SparkSession {
     *
     * @since 2.0.0
     */
-  def setActiveSession(session: SparkSession): Unit = {
+  def setActiveSession(session: MatfastSession): Unit = {
     activeThreadSession.set(session)
   }
 
@@ -253,7 +252,7 @@ object SparkSession {
     *
     * @since 2.0.0
     */
-  def setDefaultSession(session: SparkSession): Unit = {
+  def setDefaultSession(session: MatfastSession): Unit = {
     defaultSession.set(session)
   }
 
@@ -266,9 +265,9 @@ object SparkSession {
     defaultSession.set(null)
   }
 
-  private[sql] def getActiveSession: Option[SparkSession] = Option(activeThreadSession.get)
+  private[sql] def getActiveSession: Option[MatfastSession] = Option(activeThreadSession.get)
 
-  private[sql] def getDefaultSession: Option[SparkSession] = Option(defaultSession.get)
+  private[sql] def getDefaultSession: Option[MatfastSession] = Option(defaultSession.get)
 
   /** A global SQL listener used for the SQL UI. */
   private[sql] val sqlListener = new AtomicReference[SQLListener]()
@@ -278,10 +277,10 @@ object SparkSession {
   ////////////////////////////////////////////////////////////////////////////////////////
 
   /** The active SparkSession for the current thread. */
-  private val activeThreadSession = new InheritableThreadLocal[SparkSession]
+  private val activeThreadSession = new InheritableThreadLocal[MatfastSession]
 
   /** Reference to the root SparkSession. */
-  private val defaultSession = new AtomicReference[SparkSession]
+  private val defaultSession = new AtomicReference[MatfastSession]
 
   private val HIVE_SESSION_STATE_CLASS_NAME = "org.apache.spark.sql.hive.HiveSessionState"
 

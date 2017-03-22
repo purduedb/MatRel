@@ -1,6 +1,6 @@
 package org.apache.spark.sql.matfast.example
 
-import org.apache.spark.sql.matfast.SparkSession
+import org.apache.spark.sql.matfast.MatfastSession
 import org.apache.spark.sql.matfast.matrix._
 
 
@@ -10,7 +10,7 @@ import org.apache.spark.sql.matfast.matrix._
 object BasicMatrixOps {
 
   def main(args: Array[String]): Unit = {
-    val matfastSession = SparkSession.builder()
+    val matfastSession = MatfastSession.builder()
                                      .master("local[4]")
                                      .appName("SparkSessionForMatfast")
                                      .getOrCreate()
@@ -25,7 +25,7 @@ object BasicMatrixOps {
   implicit def kryoEncoder[A](implicit ct: ClassTag[A]) =
     org.apache.spark.sql.Encoders.kryo[A](ct)
 
-  private def runMatrixTranspose(spark: SparkSession): Unit = {
+  private def runMatrixTranspose(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2,2,Array[Double](1,1,2,2))
     val b2 = new DenseMatrix(2,2,Array[Double](2,2,3,3))
@@ -41,7 +41,7 @@ object BasicMatrixOps {
     }
   }
 
-  private def runMatrixScalar(spark: SparkSession): Unit = {
+  private def runMatrixScalar(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2,2,Array[Double](1,1,2,2))
     val s1 = new SparseMatrix(2,2,Array[Int](0,1,2),Array[Int](1,0),Array[Double](4,2))
@@ -52,7 +52,7 @@ object BasicMatrixOps {
     }
   }
 
-  private def runMatrixElement(spark: SparkSession): Unit = {
+  private def runMatrixElement(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2,2,Array[Double](1,1,2,2))
     val b2 = new DenseMatrix(2,2,Array[Double](2,2,3,3))
@@ -74,7 +74,7 @@ object BasicMatrixOps {
     }
   }
 
-  private def runMatrixMultiplication(spark: SparkSession): Unit = {
+  private def runMatrixMultiplication(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2,2,Array[Double](1,1,2,2))
     val b2 = new DenseMatrix(2,2,Array[Double](2,2,3,3))

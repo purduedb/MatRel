@@ -2,11 +2,11 @@ package org.apache.spark.sql.matfast.execution
 
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{SparkPlan, QueryExecution => SQLQueryExecution}
-import org.apache.spark.sql.matfast.SparkSession
+import org.apache.spark.sql.matfast.MatfastSession
 /**
   * Created by yongyangyu on 11/29/16.
   */
-class QueryExecution(val matfastSession: SparkSession, val matfastLogical: LogicalPlan)
+class QueryExecution(val matfastSession: MatfastSession, val matfastLogical: LogicalPlan)
   extends SQLQueryExecution(matfastSession, matfastLogical){
 
   lazy val matrixData: LogicalPlan = {
@@ -19,7 +19,7 @@ class QueryExecution(val matfastSession: SparkSession, val matfastLogical: Logic
   }
 
   override lazy val sparkPlan: SparkPlan = {
-    SparkSession.setActiveSession(matfastSession)
+    MatfastSession.setActiveSession(matfastSession)
     matfastSession.sessionState.matfastPlanner.plan(optimizedPlan).next()
   }
 }

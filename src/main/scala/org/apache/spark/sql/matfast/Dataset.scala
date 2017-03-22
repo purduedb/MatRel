@@ -11,11 +11,11 @@ import org.apache.spark.sql.{matfast, Dataset => SQLDataSet, _}
   * Created by yongyangyu on 2/20/17.
   */
 class Dataset[T] private[matfast]
-(@transient val matfastSession: matfast.SparkSession,
+(@transient val matfastSession: matfast.MatfastSession,
  @transient override val queryExecution: QueryExecution,
  encoder: Encoder[T]) extends SQLDataSet[T](matfastSession, queryExecution.logical, encoder)
 {
-  def this(sparkSession: matfast.SparkSession, logicalPlan: LogicalPlan, encoder: Encoder[T]) = {
+  def this(sparkSession: matfast.MatfastSession, logicalPlan: LogicalPlan, encoder: Encoder[T]) = {
     this(sparkSession, sparkSession.sessionState.executePlan(logicalPlan), encoder)
   }
 
@@ -97,11 +97,11 @@ class Dataset[T] private[matfast]
 }
 
 private[matfast] object Dataset {
-  def apply[T: Encoder](sparkSession: matfast.SparkSession, logicalPlan: LogicalPlan): Dataset[T] = {
+  def apply[T: Encoder](sparkSession: matfast.MatfastSession, logicalPlan: LogicalPlan): Dataset[T] = {
     new Dataset(sparkSession, logicalPlan, implicitly[Encoder[T]])
   }
 
-  def ofRows(sparkSession: matfast.SparkSession, logicalPlan: LogicalPlan): DataFrame = {
+  def ofRows(sparkSession: matfast.MatfastSession, logicalPlan: LogicalPlan): DataFrame = {
     val qe = sparkSession.sessionState.executePlan(logicalPlan)
     qe.assertAnalyzed()
     new Dataset[Row](sparkSession, qe, RowEncoder(qe.analyzed.schema))

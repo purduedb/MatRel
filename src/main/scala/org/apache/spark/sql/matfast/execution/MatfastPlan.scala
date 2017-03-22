@@ -1,6 +1,6 @@
 package org.apache.spark.sql.matfast.execution
 
-import org.apache.spark.sql.matfast.SparkSession
+import org.apache.spark.sql.matfast.MatfastSession
 import org.apache.spark.sql.execution.SparkPlan
 
 /**
@@ -8,7 +8,7 @@ import org.apache.spark.sql.execution.SparkPlan
   */
 abstract class MatfastPlan extends SparkPlan{
   @transient
-  protected[matfast] final val matfastSessionState = SparkSession.getActiveSession.map(_.sessionState).orNull
+  protected[matfast] final val matfastSessionState = MatfastSession.getActiveSession.map(_.sessionState).orNull
 
-  protected override def sparkContext = SparkSession.getActiveSession.map(_.sparkContext).orNull
+  protected override def sparkContext = MatfastSession.getActiveSession.map(_.sparkContext).orNull
 }

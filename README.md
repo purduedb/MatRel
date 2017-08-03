@@ -9,3 +9,8 @@ We are also working on extending the Spark SQL Catalyst such
 that the optimizer can automatically recognize the special 
 structures of matrix queries.
 
+This work was accepted by ICDE'17. More technical details and 
+design decisions can be found in the paper "In-memory distributed matrix 
+computation processing and optimization". We'll continue updating 
+the code base to embrace more useful features.
+

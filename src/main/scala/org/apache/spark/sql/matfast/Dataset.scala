@@ -25,6 +25,18 @@ class Dataset[T] private[matfast]
     TranposeOperator(this.logicalPlan)
   }
 
+  def rowSum(data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RowSumOperator(this.logicalPlan)
+  }
+
+  def colSum(data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    ColumnSumOperator(this.logicalPlan)
+  }
+
+  def sum(data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    SumOperator(this.logicalPlan)
+  }
+
   def vec(nrows: Long, ncols: Long, blkSize: Int,
           data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     VectorizeOperator(this.logicalPlan, nrows, ncols, blkSize)

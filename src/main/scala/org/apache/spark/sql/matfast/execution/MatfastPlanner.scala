@@ -27,6 +27,15 @@ class MatfastPlanner(val matfastContext: MatfastSession,
 object MatrixOperators extends Strategy {
   def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case TranposeOperator(child) => MatrixTransposeExecution(planLater(child)) :: Nil
+    case RowSumOperator(child) => child match {
+      case _ => RowSumDirectExecution(planLater(child)) :: Nil // default on an given matrix input
+    }
+    case ColumnSumOperator(child) => child match {
+      case _ => ColumnSumDirectExecution(planLater(child)) :: Nil
+    }
+    case SumOperator(child) => child match {
+      case _ => SumDirectExecution(planLater(child)) :: Nil
+    }
     case MatrixScalarAddOperator(left, right) =>
       MatrixScalarAddExecution(planLater(left), right) :: Nil
     case MatrixScalarMultiplyOperator(left, right) =>

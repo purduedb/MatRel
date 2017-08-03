@@ -1,12 +1,14 @@
 package org.apache.spark.sql.matfast.execution
 
+import org.apache.spark.SparkException
 import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.util._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
-import org.apache.spark.sql.execution.{SparkPlan}
-import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner}
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.matfast.partitioner.BlockCyclicPartitioner
+
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -30,6 +32,167 @@ case class MatrixTransposeExecution(child: SparkPlan) extends MatfastPlan {
       res.setInt(0, cid)
       res.setInt(1, rid)
       res.update(2, matrixRow)
+      res
+    }
+  }
+}
+
+// this class computes rowSum() on a matrix input
+case class RowSumDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      val matrix = MLMatrixSerializer.deserialize(matrixInternalRow)
+      val colVec = matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) { // row sum
+            val m = den.numRows
+            val arr = new Array[Double](m)
+            val values = den.values
+            for (i <- 0 until values.length) {
+              arr(i % m) += values(i)
+            }
+            new DenseMatrix(m, 1, arr)
+          } else { // column sum
+            val n = den.numCols
+            val arr = new Array[Double](n)
+            val values = den.values
+            for (i <- 0 until values.length) {
+              arr(i % n) += values(i)
+            }
+            new DenseMatrix(n, 1, arr)
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) { // CSC format
+            val arr = new Array[Double](sp.numRows)
+            for (i <- 0 until sp.rowIndices.length) {
+              arr(sp.rowIndices(i)) += sp.values(i)
+            }
+            new DenseMatrix(sp.numRows, 1, arr)
+          } else { // CSR format
+            val arr = new Array[Double](sp.numCols)
+            val colIdx = sp.rowIndices
+            for (i <- 0 until colIdx.length) {
+              arr(colIdx(i)) += sp.values(i)
+            }
+            new DenseMatrix(sp.numCols, 1, arr)
+          }
+        case _ => throw new SparkException("Undefined matrix type in RowSumDirectExecute()")
+      }
+      (rid, colVec.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val rid = blk._1
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class ColumnSumDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      val matrix = MLMatrixSerializer.deserialize(matrixInternalRow)
+      val rowVec = matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) {
+            val n = den.numCols
+            val arr = new Array[Double](n)
+            val values = den.values
+            for (i <- 0 until values.length) {
+              arr(i % n) += values(i)
+            }
+            new DenseMatrix(1, n, arr)
+          } else {
+            val m = den.numRows
+            val arr = new Array[Double](m)
+            val values = den.values
+            for (i <- 0 until values.length) {
+              arr(i % m) += values(i)
+            }
+            new DenseMatrix(1, m, arr)
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) { // CSC format
+            val arr = new Array[Double](sp.numCols)
+            for (i <- 0 until sp.colPtrs.length - 1) {
+              for (j <- 0 until sp.colPtrs(i+1) - sp.colPtrs(i)) {
+                arr(i) += sp.values(i + j)
+              }
+            }
+            new DenseMatrix(1, sp.numCols, arr)
+          } else { // CSR format
+            val arr = new Array[Double](sp.numRows)
+            val colIdx = sp.rowIndices
+            val rowPtrs = sp.colPtrs
+            for (i <-  0 until rowPtrs.length - 1) {
+              for (j <- 0 until rowPtrs(i+1) - rowPtrs(i)) {
+                arr(i) += sp.values(i + j)
+              }
+            }
+            new DenseMatrix(1, sp.numRows, arr)
+          }
+        case _ => throw new SparkException("Undefined matrix type in ColumnSumDirectExecute()")
+      }
+      (cid, rowVec.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val cid = blk._1
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class SumDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val matrixInternalRow = row.getStruct(2, 7)
+      val matrix = MLMatrixSerializer.deserialize(matrixInternalRow)
+      val scalar = matrix match {
+        case den: DenseMatrix =>
+          new DenseMatrix(1, 1, Array[Double](den.values.sum))
+        case sp: SparseMatrix =>
+          new DenseMatrix(1, 1, Array[Double](sp.values.sum))
+        case _ =>
+          throw new SparkException("Undefined matrix type in SumDirectExecute()")
+      }
+      (0, scalar.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
       res
     }
   }

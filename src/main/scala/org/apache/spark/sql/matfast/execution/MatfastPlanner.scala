@@ -27,13 +27,47 @@ class MatfastPlanner(val matfastContext: MatfastSession,
 object MatrixOperators extends Strategy {
   def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case TranposeOperator(child) => MatrixTransposeExecution(planLater(child)) :: Nil
-    case RowSumOperator(child) => child match {
+    case RowSumOperator(child, nrows, ncols) => child match {
+      case TranposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(ColumnSumDirectExecution(planLater(beforeTrans))) :: Nil
+      case MatrixScalarAddOperator(child, alpha) =>
+        MatrixScalarAddExecution(RowSumDirectExecution(planLater(child)), alpha*ncols) :: Nil
+      case MatrixScalarMultiplyOperator(child, alpha) =>
+        MatrixScalarMultiplyExecution(RowSumDirectExecution(planLater(child)), alpha) :: Nil
+      case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+        MatrixElementAddExecution(RowSumDirectExecution(planLater(left)), leftRowNum, 1L,
+          RowSumDirectExecution(planLater(right)), rightRowNum, 1L, blkSize) :: Nil
+      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+        MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum,
+          RowSumDirectExecution(planLater(right)), rightRowNum, 1L, blkSize) :: Nil
       case _ => RowSumDirectExecution(planLater(child)) :: Nil // default on an given matrix input
     }
-    case ColumnSumOperator(child) => child match {
+    case ColumnSumOperator(child, nrows, ncols) => child match {
+      case TranposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(RowSumDirectExecution(planLater(beforeTrans))) :: Nil
+      case MatrixScalarAddOperator(child, alpha) =>
+        MatrixScalarAddExecution(ColumnSumDirectExecution(planLater(child)), alpha*nrows) :: Nil
+      case MatrixScalarMultiplyOperator(child, alpha) =>
+        MatrixScalarMultiplyExecution(ColumnSumDirectExecution(planLater(child)), alpha) :: Nil
+      case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+        MatrixElementAddExecution(ColumnSumDirectExecution(planLater(left)), 1L, leftColNum,
+          ColumnSumDirectExecution(planLater(right)), 1L, rightColNum, blkSize) :: Nil
+      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+        MatrixMatrixMultiplicationExecution(ColumnSumDirectExecution(planLater(left)), 1L, leftColNum,
+          planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
       case _ => ColumnSumDirectExecution(planLater(child)) :: Nil
     }
-    case SumOperator(child) => child match {
+    case SumOperator(child, nrows, ncols) => child match {
+      case TranposeOperator(beforeTans) => SumDirectExecution(planLater(beforeTans)) :: Nil
+      case MatrixScalarAddOperator(child, alpha) =>
+        MatrixScalarAddExecution(SumDirectExecution(planLater(child)), alpha*nrows*ncols) :: Nil
+      case MatrixScalarMultiplyOperator(child, alpha) =>
+        MatrixScalarMultiplyExecution(SumDirectExecution(planLater(child)), alpha) :: Nil
+      case MatrixElementAddOperator(left, leftRowNum, leftColNum, righr, rightRow, rightColNum, blkSize) =>
+        MatrixElementAddExecution(SumDirectExecution(planLater(left)), 1L, 1L, SumDirectExecution(planLater(right)), 1L, 1L, blkSize) :: Nil
+      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+        MatrixMatrixMultiplicationExecution(ColumnSumDirectExecution(planLater(left)), 1L, leftColNum,
+          RowSumDirectExecution(planLater(right)), rightRowNum, 1L, blkSize) :: Nil
       case _ => SumDirectExecution(planLater(child)) :: Nil
     }
     case MatrixScalarAddOperator(left, right) =>

@@ -92,6 +92,25 @@ object BasicMatrixOps {
     }
   }
 
+  /*
+   * mat1 has the following structure
+   * ---------------
+   * | 1  2 |      |
+   * | 1  2 |      |
+   * ---------------
+   * |      | 2  3 |
+   * |      | 2  3 |
+   * ---------------
+   * and mat2 looks like the following
+   * ---------------
+   * | 3  4 | 4  6 |
+   * | 3  4 | 5  7 |
+   * ---------------
+   * |      | 0  2 |
+   * |      | 4  0 |
+   * ---------------
+   */
+
   private def runMatrixAggregation(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2,2,Array[Double](1,1,2,2))
@@ -102,7 +121,7 @@ object BasicMatrixOps {
     val mat1 = Seq(MatrixBlock(0,0,b1), MatrixBlock(1,1,b2)).toDS()
     val mat2 = Seq(MatrixBlock(0,0,b3), MatrixBlock(0,1,b4), MatrixBlock(1,1,s1)).toDS()
     import spark.MatfastImplicits._
-    val mat1_rowsum = mat1.rowSum(4, 4)
+    val mat1_rowsum = mat1.t().rowSum(4, 4)
     mat1_rowsum.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])

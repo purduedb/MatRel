@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.matfast.plans._
-import org.apache.spark.sql.{matfast, Dataset => SQLDataSet, _}
+import org.apache.spark.sql.{matfast, Dataset => SQLDataSet, Row, Encoder}
 
 /**
   * Created by yongyangyu on 2/20/17.

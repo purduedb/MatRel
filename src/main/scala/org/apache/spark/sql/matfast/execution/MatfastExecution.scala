@@ -65,8 +65,10 @@ case class RowSumDirectExecution(child: SparkPlan) extends MatfastPlan {
             val n = den.numCols
             val arr = new Array[Double](n)
             val values = den.values
-            for (i <- 0 until values.length) {
-              arr(i % n) += values(i)
+            for (i <- 0 until n) {
+              for (j <- 0 until den.numRows) {
+                arr(i) += values(i * den.numRows + j)
+              }
             }
             new DenseMatrix(n, 1, arr)
           }
@@ -119,8 +121,10 @@ case class ColumnSumDirectExecution(child: SparkPlan) extends MatfastPlan {
             val n = den.numCols
             val arr = new Array[Double](n)
             val values = den.values
-            for (i <- 0 until values.length) {
-              arr(i % n) += values(i)
+            for (i <- 0 until n) {
+              for (j <- 0 until den.numRows) {
+                arr(i) += values(i*den.numRows + j)
+              }
             }
             new DenseMatrix(1, n, arr)
           } else {

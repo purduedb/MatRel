@@ -63,7 +63,7 @@ object MatrixOperators extends Strategy {
         MatrixScalarAddExecution(SumDirectExecution(planLater(child)), alpha*nrows*ncols) :: Nil
       case MatrixScalarMultiplyOperator(child, alpha) =>
         MatrixScalarMultiplyExecution(SumDirectExecution(planLater(child)), alpha) :: Nil
-      case MatrixElementAddOperator(left, leftRowNum, leftColNum, righr, rightRow, rightColNum, blkSize) =>
+      case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRow, rightColNum, blkSize) =>
         MatrixElementAddExecution(SumDirectExecution(planLater(left)), 1L, 1L, SumDirectExecution(planLater(right)), 1L, 1L, blkSize) :: Nil
       case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
         MatrixMatrixMultiplicationExecution(ColumnSumDirectExecution(planLater(left)), 1L, leftColNum,

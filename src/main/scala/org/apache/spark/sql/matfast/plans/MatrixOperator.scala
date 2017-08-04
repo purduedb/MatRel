@@ -12,17 +12,23 @@ case class TranposeOperator(child: LogicalPlan) extends UnaryNode {
 
 // Computes sum along the row direction, resulting in a column vector
 // The schema of the following three operators are correct. Everything is deemed as a matrix.
-case class RowSumOperator(child: LogicalPlan) extends UnaryNode {
+case class RowSumOperator(child: LogicalPlan,
+                          nrows: Long,
+                          ncols: Long) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }
 
 // Computes sum along the column direction, resulting in a row vector
-case class ColumnSumOperator(child: LogicalPlan) extends UnaryNode {
+case class ColumnSumOperator(child: LogicalPlan,
+                             nrows: Long,
+                             ncols: Long) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }
 
 // Computes sum of all the elements in a matrix, resulting in a scalar
-case class SumOperator(child: LogicalPlan) extends UnaryNode {
+case class SumOperator(child: LogicalPlan,
+                       nrows: Long,
+                       ncols: Long) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }
 

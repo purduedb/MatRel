@@ -1,23 +1,43 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast.matrix
 
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
-import org.apache.spark.SparkException
+
 import org.apache.spark.mllib.linalg.{DenseMatrix => SparkDense, Matrix => SparkMatrix, SparseMatrix => SparkSparse}
+import org.apache.spark.SparkException
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
-  * Created by yongyangyu on 7/19/15.
   * Expose some common operations on MLMatrices.
   * Especially, provide matrix multiplication implementation for CSC format sparse matrices.
   */
+
 object LocalMatrix {
   def add(a: MLMatrix, b: MLMatrix): MLMatrix = {
     if (a != null && b != null) {
-      require(a.numRows == b.numRows, s"Matrix A and B must have the same number of rows. But found " +
+      require(a.numRows == b.numRows,
+        s"Matrix A and B must have the same number of rows. But found " +
         s"A.numRows = ${a.numRows}, B.numRows = ${b.numRows}")
-      require(a.numCols == b.numCols, s"Matrix A and B must have the same number of cols. But found " +
+      require(a.numCols == b.numCols,
+        s"Matrix A and B must have the same number of cols. But found " +
         s"A.numCols = ${a.numCols}, B.numCols = ${b.numCols}")
       (a, b) match {
         case (ma: DenseMatrix, mb: DenseMatrix) => addDense(ma, mb)
@@ -319,7 +339,7 @@ object LocalMatrix {
     for (i <- 0 until colIdxcsr.length) {
       val elem = colMap.getOrElse(colIdxcsr(i), new ArrayBuffer[Int]())
       elem += i
-      colMap(colIdxcsr(i)) = elem   //update for the map
+      colMap(colIdxcsr(i)) = elem   // update for the map
     }
     var idx = 0
     for (c <- 0 until colPtr.length - 1) {
@@ -427,7 +447,8 @@ object LocalMatrix {
       new BSM[Double](mat.values, mat.numRows, mat.numCols, mat.colPtrs, mat.rowIndices)
     }
     else {
-      val breezeMatrix = new BSM[Double](mat.values, mat.numRows, mat.numCols, mat.colPtrs, mat.rowIndices)
+      val breezeMatrix = new BSM[Double](
+        mat.values, mat.numRows, mat.numCols, mat.colPtrs, mat.rowIndices)
       breezeMatrix.t
     }
   }
@@ -435,14 +456,18 @@ object LocalMatrix {
   def fromBreeze(breeze: BM[Double]): MLMatrix = {
     breeze match {
       case dm: BDM[Double] => new DenseMatrix(dm.rows, dm.cols, dm.data, dm.isTranspose)
-      case sp: BSM[Double] => new SparseMatrix(sp.rows, sp.cols, sp.colPtrs, sp.rowIndices, sp.data)
-      case _ => throw new UnsupportedOperationException(s"Do not support conversion from type ${breeze.getClass.getName}")
+      case sp: BSM[Double] =>
+        new SparseMatrix(sp.rows, sp.cols, sp.colPtrs, sp.rowIndices, sp.data)
+      case _ => throw new UnsupportedOperationException(
+        s"Do not support conversion from type ${breeze.getClass.getName}")
     }
   }
 
   def elementWiseMultiply(mat1: MLMatrix, mat2: MLMatrix): MLMatrix = {
-    require(mat1.numRows == mat2.numRows, s"mat1.numRows = ${mat1.numRows}, mat2.numRows = ${mat2.numRows}")
-    require(mat1.numCols == mat2.numCols, s"mat1.numCols = ${mat1.numCols}, mat2.numCols = ${mat2.numCols}")
+    require(mat1.numRows == mat2.numRows,
+      s"mat1.numRows = ${mat1.numRows}, mat2.numRows = ${mat2.numRows}")
+    require(mat1.numCols == mat2.numCols,
+      s"mat1.numCols = ${mat1.numCols}, mat2.numCols = ${mat2.numCols}")
     (mat1, mat2) match {
       case (ma: DenseMatrix, mb: DenseMatrix) => elementWiseOpDenseDense(ma, mb)
       case (ma: DenseMatrix, mb: SparseMatrix) => elementWiseOpDenseSparse(ma, mb)
@@ -452,8 +477,10 @@ object LocalMatrix {
   }
 
   def elementWiseDivide(mat1: MLMatrix, mat2: MLMatrix): MLMatrix = {
-    require(mat1.numRows == mat2.numRows, s"mat1.numRows = ${mat1.numRows}, mat2.numRows = ${mat2.numRows}")
-    require(mat1.numCols == mat2.numCols, s"mat1.numCols = ${mat1.numCols}, mat2.numCols = ${mat2.numCols}")
+    require(mat1.numRows == mat2.numRows,
+      s"mat1.numRows = ${mat1.numRows}, mat2.numRows = ${mat2.numRows}")
+    require(mat1.numCols == mat2.numCols,
+      s"mat1.numCols = ${mat1.numCols}, mat2.numCols = ${mat2.numCols}")
     (mat1, mat2) match {
       case (ma: DenseMatrix, mb: DenseMatrix) => elementWiseOpDenseDense(ma, mb, 1)
       case (ma: DenseMatrix, mb: SparseMatrix) => elementWiseOpDenseSparse(ma, mb, 1)
@@ -518,10 +545,13 @@ object LocalMatrix {
     }
   }
 
-  def elementWiseOpSparseSparseNative(ma: SparseMatrix, mb: SparseMatrix, op: Int = 0): MLMatrix = {
-    require(ma.numRows == mb.numRows, s"Matrix A.numRows must be equal to B.numRows, but found " +
+  def elementWiseOpSparseSparseNative(ma: SparseMatrix,
+                                      mb: SparseMatrix, op: Int = 0): MLMatrix = {
+    require(ma.numRows == mb.numRows,
+      s"Matrix A.numRows must be equal to B.numRows, but found " +
       s"A.numRows = ${ma.numRows}, B.numRows = ${mb.numRows}")
-    require(ma.numCols == mb.numCols, s"Matrix A.numCols must be equal to B.numCols, but found " +
+    require(ma.numCols == mb.numCols,
+      s"Matrix A.numCols must be equal to B.numCols, but found " +
       s"A.numCols = ${ma.numCols}, B.numCols = ${mb.numCols}")
     val va = ma.values
     val rowIdxa = ma.rowIndices
@@ -573,17 +603,24 @@ object LocalMatrix {
 
   // C = C + A * B, and C is pre-allocated already
   // this method should save memory when C is reused for later iterations
-  // cannot handle the case when C is a sparse matrix and holding a non-exsitent entry for the product
+  // cannot handle the case when C is a sparse matrix and holding a non-exsitent
+  // entry for the product
   def incrementalMultiply(A: MLMatrix, B: MLMatrix, C: MLMatrix): MLMatrix = {
     require(A.numRows == C.numCols && B.numCols == C.numCols, s"dimension mismatch " +
-      s"A.numRows = ${A.numRows}, C.numRows = ${C.numRows}, B.numCols = ${B.numCols}, C.numCols = ${C.numCols}")
+      s"A.numRows = ${A.numRows}, C.numRows = ${C.numRows}," +
+      s"B.numCols = ${B.numCols}, C.numCols = ${C.numCols}")
     (A, B, C) match {
-      case (matA: DenseMatrix, matB: DenseMatrix, matC: DenseMatrix) => incrementalMultiplyDenseDense(matA, matB, matC)
-      case (matA: DenseMatrix, matB: SparseMatrix, matC: DenseMatrix) => incrementalMultiplyDenseSparse(matA, matB, matC)
-      case (matA: SparseMatrix, matB: DenseMatrix, matC: DenseMatrix) => incrementalMultiplySparseDense(matA, matB, matC)
-      case (matA: SparseMatrix, matB: SparseMatrix, matC: DenseMatrix) => incrementalMultiplySparseSparseDense(matA, matB, matC)
-      //case (matA: SparseMatrix, matB: SparseMatrix, matC: SparseMatrix) =>
-      case _ => new SparkException(s"incrememtalMultiply does not apply to the required format of matrices, " +
+      case (matA: DenseMatrix, matB: DenseMatrix, matC: DenseMatrix) =>
+        incrementalMultiplyDenseDense(matA, matB, matC)
+      case (matA: DenseMatrix, matB: SparseMatrix, matC: DenseMatrix) =>
+        incrementalMultiplyDenseSparse(matA, matB, matC)
+      case (matA: SparseMatrix, matB: DenseMatrix, matC: DenseMatrix) =>
+        incrementalMultiplySparseDense(matA, matB, matC)
+      case (matA: SparseMatrix, matB: SparseMatrix, matC: DenseMatrix) =>
+        incrementalMultiplySparseSparseDense(matA, matB, matC)
+      // case (matA: SparseMatrix, matB: SparseMatrix, matC: SparseMatrix) =>
+      case _ => new SparkException(s"incrememtalMultiply does not apply to " +
+        s"the required format of matrices, " +
         s"A: ${A.getClass}, B: ${B.getClass}, C: ${C.getClass}")
     }
     C
@@ -623,7 +660,7 @@ object LocalMatrix {
     // multiply a matrix from right-hand-side is equvilent to perform column transformantion
     // on the first matrix
     for (c <- 0 until B.numCols) {
-      val count = colPtr(c+1) - colPtr(c)
+      val count = colPtr(c + 1) - colPtr(c)
       val cstart = colPtr(c)
       for (ridx <- cstart until cstart + count) {
         val v = values(ridx)
@@ -657,7 +694,7 @@ object LocalMatrix {
     // multiply a sparse matrix from left-hand-side is equivalent to perform row transformation
     // on the second matrix
     for (r <- 0 until A.numRows) {
-      val count = rowPtr(r+1) - rowPtr(r)
+      val count = rowPtr(r + 1) - rowPtr(r)
       val rstart = rowPtr(r)
       for (cidx <- rstart until rstart + count) {
         val v = values(cidx)
@@ -678,7 +715,9 @@ object LocalMatrix {
     }
   }
 
-  private def incrementalMultiplySparseSparseDense(A: SparseMatrix, B: SparseMatrix, C: DenseMatrix) = {
+  private def incrementalMultiplySparseSparseDense(A: SparseMatrix,
+                                                   B: SparseMatrix,
+                                                   C: DenseMatrix) = {
     if (!A.isTransposed && !B.isTransposed) { // both A and B are not transposed
     // process as column transformation on A
     val valuesb = B.values
@@ -688,13 +727,13 @@ object LocalMatrix {
       val rowIdxa = A.rowIndices
       val colPtra = A.colPtrs
       for (cb <- 0 until B.numCols) {
-        val countb = colPtrb(cb+1) - colPtrb(cb)
+        val countb = colPtrb(cb + 1) - colPtrb(cb)
         val startb = colPtrb(cb)
         for (ridxb <- startb until startb + countb) {
           val vb = valuesb(ridxb)
           val rowb = rowIdxb(ridxb)
           // get rowb-th column from A and multiply it with vb
-          val counta = colPtra(rowb+1) - colPtra(rowb)
+          val counta = colPtra(rowb + 1) - colPtra(rowb)
           val starta = colPtra(rowb)
           for (ridxa <- starta until starta + counta) {
             val va = valuesa(ridxa)
@@ -718,13 +757,13 @@ object LocalMatrix {
       val colIdxb = B.rowIndices
       val rowPtrb = B.colPtrs
       for (ra <- 0 until A.numRows) {
-        val counta = rowPtra(ra+1) - rowPtra(ra)
+        val counta = rowPtra(ra + 1) - rowPtra(ra)
         val starta = rowPtra(ra)
         for (cidxa <- starta until starta + counta) {
           val va = valuesa(cidxa)
           val cola = colIdxa(cidxa)
           // get cola-th row from B and multiply it with va
-          val countb = rowPtrb(cola+1) - rowPtrb(cola)
+          val countb = rowPtrb(cola + 1) - rowPtrb(cola)
           val startb = rowPtrb(cola)
           for (cidxb <- startb until startb + countb) {
             val vb = valuesb(cidxb)
@@ -739,7 +778,8 @@ object LocalMatrix {
         }
       }
     }
-    else if (A.isTransposed && !B.isTransposed) { // A is stored in row format and B is stored in column format
+    else if (A.isTransposed && !B.isTransposed) {
+    // A is stored in row format and B is stored in column format
     // this is an easy (natrual) case
     val valuesa = A.values
       val colIdxa = A.rowIndices
@@ -748,14 +788,14 @@ object LocalMatrix {
       val rowIdxb = B.rowIndices
       val colPtrb = B.colPtrs
       for (ra <- 0 until A.numRows) {
-        val counta = rowPtra(ra+1) - rowPtra(ra)
+        val counta = rowPtra(ra + 1) - rowPtra(ra)
         val starta = rowPtra(ra)
         val entrya: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
         for (cidxa <- starta until starta + counta) {
           entrya.append((colIdxa(cidxa), valuesa(cidxa)))
         }
         for (cb <- 0 until B.numCols) {
-          val countb = colPtrb(cb+1) - colPtrb(cb)
+          val countb = colPtrb(cb + 1) - colPtrb(cb)
           val startb = colPtrb(cb)
           val entryb: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
           for (ridxb <- startb until startb + countb) {
@@ -789,13 +829,13 @@ object LocalMatrix {
       val colIdxb = B.rowIndices
       val rowPtrb = B.colPtrs
       for (idx <- 0 until A.numCols) {
-        val counta = colPtra(idx+1) - colPtra(idx)
+        val counta = colPtra(idx + 1) - colPtra(idx)
         val starta = colPtra(idx)
         val entrya: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
         for (ridx <- starta until starta + counta) {
           entrya.append((rowIdxa(ridx), valuesa(ridx)))
         }
-        val countb = rowPtrb(idx+1) - rowPtrb(idx)
+        val countb = rowPtrb(idx + 1) - rowPtrb(idx)
         val startb = rowPtrb(idx)
         val entryb: ArrayBuffer[(Int, Double)] = new ArrayBuffer[(Int, Double)]()
         for (cidx <- startb until startb + countb) {
@@ -963,8 +1003,8 @@ object LocalMatrix {
         val div = vec.toArray
         val rowIdx = sp.rowIndices
         val colPtr = sp.colPtrs
-        for (cid <- 0 until colPtr.length-1) {
-          val count = colPtr(cid+1) - colPtr(cid)
+        for (cid <- 0 until colPtr.length - 1) {
+          val count = colPtr(cid + 1) - colPtr(cid)
           for (i <- 0 until count) {
             val idx = colPtr(cid) + i
             if (div(cid) != 0) { // avoid dividing by zero
@@ -994,7 +1034,7 @@ object LocalMatrix {
             values(i) = 0
           }
         }
-        //println(values.mkString("[", ",", "]"))
+        // println(values.mkString("[", ",", "]"))
         if (nnz > 0.1 * den.numRows * den.numCols) {
           new DenseMatrix(mat.numRows, mat.numCols, values)
         }
@@ -1055,14 +1095,15 @@ object LocalMatrix {
 
 object TestSparse {
   def main (args: Array[String]) {
-    val va = Array[Double](1,2,3,4,5,6)
-    val rowIdxa = Array[Int](0,2,1,0,1,2)
-    val colPtra = Array[Int](0,2,3,6)
-    val vb = Array[Double](3,1,2,2)
-    val rowIdxb = Array[Int](1,0,2,0)
-    val colPtrb = Array[Int](0,1,3,4)
-    val spmat1 = new SparseMatrix(3,3,colPtra,rowIdxa,va)
-    val spmat2 = new SparseMatrix(3,3,colPtrb,rowIdxb,vb)
+    val va = Array[Double](1, 2, 3, 4, 5, 6)
+    val rowIdxa = Array[Int](0, 2, 1, 0, 1, 2)
+    val colPtra = Array[Int](0, 2, 3, 6)
+    val vb = Array[Double](3, 1, 2, 2)
+    val rowIdxb = Array[Int](1, 0, 2, 0)
+    val colPtrb = Array[Int](0, 1, 3, 4)
+    val spmat1 = new SparseMatrix(3, 3, colPtra, rowIdxa, va)
+    val spmat2 = new SparseMatrix(3, 3, colPtrb, rowIdxb, vb)
+    // scalastyle:off
     println(spmat1)
     println("-" * 20)
     println(spmat2)
@@ -1073,14 +1114,16 @@ object TestSparse {
     println("-" * 20)
     println(LocalMatrix.add(spmat1, spmat2))
     println("-" * 20)
-    //println(LocalMatrix.addSparseSparseNative(spmat1, spmat2))
-    val vd1 = Array[Double](1,4,7,2,5,8,3,6,9)
-    val vd2 = Array[Double](1,2,3,1,2,3,1,2,3)
-    val den1 = new DenseMatrix(3,3,vd1)
-    val den2 = new DenseMatrix(3,3,vd2)
-    val denC = DenseMatrix.zeros(3,3)
-    val denV = new DenseMatrix(3, 1, Array[Double](1,2,3))
+    // scalastyle:on
+    // println(LocalMatrix.addSparseSparseNative(spmat1, spmat2))
+    val vd1 = Array[Double](1, 4, 7, 2, 5, 8, 3, 6, 9)
+    val vd2 = Array[Double](1, 2, 3, 1, 2, 3, 1, 2, 3)
+    val den1 = new DenseMatrix(3, 3, vd1)
+    val den2 = new DenseMatrix(3, 3, vd2)
+    val denC = DenseMatrix.zeros(3, 3)
+    val denV = new DenseMatrix(3, 1, Array[Double](1, 2, 3))
     LocalMatrix.incrementalMultiply(spmat2, spmat2.transpose, denC)
+    // scalastyle:off
     println(denC)
     println("-" * 20)
     println(LocalMatrix.multiplySparseMatDenseVec(spmat1, denV))
@@ -1088,5 +1131,6 @@ object TestSparse {
     println(LocalMatrix.multiplySparseSparse(spmat1, spmat2.transpose))
     println(spmat1)
     println(LocalMatrix.matrixDivideVector(den2, denV))
+    // scalastyle:on
   }
 }

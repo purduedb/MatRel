@@ -1,15 +1,30 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast
 
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.{matfast, Dataset => SQLDataSet, Encoder, Row}
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.matfast.plans._
-import org.apache.spark.sql.{matfast, Dataset => SQLDataSet, Row, Encoder}
 
-/**
-  * Created by yongyangyu on 2/20/17.
-  */
+
 class Dataset[T] private[matfast]
 (@transient val matfastSession: matfast.MatfastSession,
  @transient override val queryExecution: QueryExecution,
@@ -45,15 +60,19 @@ class Dataset[T] private[matfast]
     VectorizeOperator(this.logicalPlan, nrows, ncols, blkSize)
   }
 
-  def addScalar(alpha: Double, data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
-    MatrixScalarAddOperator(this.logicalPlan, alpha)
-  }
+  def addScalar(alpha: Double,
+                data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan { MatrixScalarAddOperator(this.logicalPlan, alpha) }
 
-  def multiplyScalar(alpha: Double, data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+  def multiplyScalar(alpha: Double,
+                     data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
     MatrixScalarMultiplyOperator(this.logicalPlan, alpha)
   }
 
-  def power(alpha: Double, data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+  def power(alpha: Double,
+            data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
     MatrixPowerOperator(this.logicalPlan, alpha)
   }
 
@@ -62,39 +81,48 @@ class Dataset[T] private[matfast]
                  rightRowNum: Long, rightColNum: Long,
                  blkSize: Int,
                  data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
-    MatrixElementAddOperator(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+    MatrixElementAddOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, blkSize)
   }
 
   def multiplyElement(leftRowNum: Long, leftColNum: Long,
                       right: DataFrame,
                       rightRowNum: Long, rightColNum: Long,
                       blkSize: Int,
-                      data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
-    MatrixElementMultiplyOperator(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+                      data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    MatrixElementMultiplyOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, blkSize)
   }
 
   def divideElement(leftRowNum: Long, leftColNum: Long,
                     right: DataFrame,
                     rightRowNum: Long, rightColNum: Long,
                     blkSize: Int,
-                    data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
-    MatrixElementDivideOperator(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+                    data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    MatrixElementDivideOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, blkSize)
   }
 
   def matrixMultiply(leftRowNum: Long, leftColNum: Long,
                      right: DataFrame,
                      rightRowNum: Long, rightColNum: Long,
                      blkSize: Int,
-                     data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
-    MatrixMatrixMultiplicationOperator(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+                     data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    MatrixMatrixMultiplicationOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, blkSize)
   }
 
   def matrixRankOneUpdate(leftRowNum: Long, leftColNum: Long,
                           right: DataFrame,
                           rightRowNum: Long, rightColNum: Long,
                           blkSize: Int,
-                          data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
-    RankOneUpdateOperator(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+                          data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    RankOneUpdateOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, blkSize)
   }
 
   private def getAttributes(keys: Array[String],

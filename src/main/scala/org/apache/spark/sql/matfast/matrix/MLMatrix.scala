@@ -1,4 +1,3 @@
-package org.apache.spark.sql.matfast.matrix
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,19 +15,23 @@ package org.apache.spark.sql.matfast.matrix
  * limitations under the License.
  */
 
+package org.apache.spark.sql.matfast.matrix
+
 import java.util.{Arrays, Random}
 
 import scala.collection.mutable.{ArrayBuffer, ArrayBuilder => MArrayBuilder, HashSet => MHashSet}
 import scala.language.implicitConversions
+
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
+
 import org.apache.spark.annotation.Since
 import org.apache.spark.ml.{linalg => newlinalg}
-import org.apache.spark.sql.types._
 import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeArrayData}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
+import org.apache.spark.sql.types._
 
 /**
   * Abstract class for a local matrix.

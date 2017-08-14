@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.matfast.execution
 
+import scala.collection.concurrent.TrieMap
+
 import org.apache.spark.Partitioner
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -24,11 +26,6 @@ import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.matfast.matrix.{LocalMatrix, MatrixBlock}
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, IndexPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
-
-// scalastyle:off
-import scala.collection.concurrent.TrieMap
-// scalastyle:on
-
 
 object MatfastExecutionHelper {
 

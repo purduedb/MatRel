@@ -1,20 +1,35 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast.execution
 
-import org.apache.spark.sql.matfast.MatfastSession
-import org.apache.spark.sql.matfast.execution._
-import org.apache.spark.sql.matfast.plans._
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{Strategy, catalyst}
+import org.apache.spark.sql.{catalyst, Strategy}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, Literal, PredicateHelper}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{SparkPlan, SparkPlanner}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.matfast.MatfastSession
+import org.apache.spark.sql.matfast.execution._
+import org.apache.spark.sql.matfast.plans._
 
-/**
-  * Created by yongyangyu on 11/29/16.
-  */
+
 class MatfastPlanner(val matfastContext: MatfastSession,
                      override val conf: SQLConf,
                      override val extraStrategies: Seq[Strategy])
@@ -34,10 +49,12 @@ object MatrixOperators extends Strategy {
         MatrixScalarAddExecution(RowSumDirectExecution(planLater(child)), alpha*ncols) :: Nil
       case MatrixScalarMultiplyOperator(child, alpha) =>
         MatrixScalarMultiplyExecution(RowSumDirectExecution(planLater(child)), alpha) :: Nil
-      case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+      case MatrixElementAddOperator(left, leftRowNum, leftColNum,
+      right, rightRowNum, rightColNum, blkSize) =>
         MatrixElementAddExecution(RowSumDirectExecution(planLater(left)), leftRowNum, 1L,
           RowSumDirectExecution(planLater(right)), rightRowNum, 1L, blkSize) :: Nil
-      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
+      right, rightRowNum, rightColNum, blkSize) =>
         MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum,
           RowSumDirectExecution(planLater(right)), rightRowNum, 1L, blkSize) :: Nil
       case _ => RowSumDirectExecution(planLater(child)) :: Nil // default on an given matrix input
@@ -49,12 +66,14 @@ object MatrixOperators extends Strategy {
         MatrixScalarAddExecution(ColumnSumDirectExecution(planLater(child)), alpha*nrows) :: Nil
       case MatrixScalarMultiplyOperator(child, alpha) =>
         MatrixScalarMultiplyExecution(ColumnSumDirectExecution(planLater(child)), alpha) :: Nil
-      case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
+      case MatrixElementAddOperator(left, leftRowNum, leftColNum,
+      right, rightRowNum, rightColNum, blkSize) =>
         MatrixElementAddExecution(ColumnSumDirectExecution(planLater(left)), 1L, leftColNum,
           ColumnSumDirectExecution(planLater(right)), 1L, rightColNum, blkSize) :: Nil
-      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
-        MatrixMatrixMultiplicationExecution(ColumnSumDirectExecution(planLater(left)), 1L, leftColNum,
-          planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
+      right, rightRowNum, rightColNum, blkSize) =>
+        MatrixMatrixMultiplicationExecution(ColumnSumDirectExecution(planLater(left)), 1L,
+          leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
       case _ => ColumnSumDirectExecution(planLater(child)) :: Nil
     }
     case SumOperator(child, nrows, ncols) => child match {
@@ -63,11 +82,14 @@ object MatrixOperators extends Strategy {
         MatrixScalarAddExecution(SumDirectExecution(planLater(child)), alpha*nrows*ncols) :: Nil
       case MatrixScalarMultiplyOperator(child, alpha) =>
         MatrixScalarMultiplyExecution(SumDirectExecution(planLater(child)), alpha) :: Nil
-      case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRow, rightColNum, blkSize) =>
-        MatrixElementAddExecution(SumDirectExecution(planLater(left)), 1L, 1L, SumDirectExecution(planLater(right)), 1L, 1L, blkSize) :: Nil
-      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
-        MatrixMatrixMultiplicationExecution(ColumnSumDirectExecution(planLater(left)), 1L, leftColNum,
-          RowSumDirectExecution(planLater(right)), rightRowNum, 1L, blkSize) :: Nil
+      case MatrixElementAddOperator(left, leftRowNum, leftColNum,
+      right, rightRow, rightColNum, blkSize) =>
+        MatrixElementAddExecution(SumDirectExecution(planLater(left)), 1L, 1L,
+          SumDirectExecution(planLater(right)), 1L, 1L, blkSize) :: Nil
+      case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
+      right, rightRowNum, rightColNum, blkSize) =>
+        MatrixMatrixMultiplicationExecution(ColumnSumDirectExecution(planLater(left)), 1L,
+          leftColNum, RowSumDirectExecution(planLater(right)), rightRowNum, 1L, blkSize) :: Nil
       case _ => SumDirectExecution(planLater(child)) :: Nil
     }
     case MatrixScalarAddOperator(left, right) =>
@@ -78,16 +100,26 @@ object MatrixOperators extends Strategy {
       MatrixPowerExecution(planLater(left), right) :: Nil
     case VectorizeOperator(child, nrows, ncols, blkSize) =>
       VectorizeExecution(planLater(child), nrows, ncols, blkSize) :: Nil
-    case MatrixElementAddOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
-      MatrixElementAddExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
-    case MatrixElementMultiplyOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
-      MatrixElementMultiplyExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
-    case MatrixElementDivideOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
-      MatrixElementDivideExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
-    case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
-      MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
-    case RankOneUpdateOperator(left, leftRowNum, leftColNum, right, rightRowNum, rightColNum, blkSize) =>
-      RankOneUpdateExecution(planLater(left), leftRowNum, leftColNum, planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+    case MatrixElementAddOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, blkSize) =>
+      MatrixElementAddExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+    case MatrixElementMultiplyOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, blkSize) =>
+      MatrixElementMultiplyExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+    case MatrixElementDivideOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, blkSize) =>
+      MatrixElementDivideExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+    case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, blkSize) =>
+      MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+    case RankOneUpdateOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, blkSize) =>
+      RankOneUpdateExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
     case _ => Nil
   }
 }

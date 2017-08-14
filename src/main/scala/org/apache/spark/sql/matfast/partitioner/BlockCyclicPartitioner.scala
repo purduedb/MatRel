@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast.partitioner
 
 import org.apache.spark.{Partitioner, SparkConf}
@@ -18,9 +35,11 @@ class BlockCyclicPartitioner(val ROW_BLKS: Int,
 
   require(ROW_BLKS > 0, s"Number of row blocks should be larger than 0, but found $ROW_BLKS")
   require(COL_BLKS > 0, s"Number of col blocks should be larger than 0, but found $COL_BLKS")
-  require(ROW_BLKS_PER_PARTITION > 0, s"Number of row blocks per partition should be larger than 0, " +
+  require(ROW_BLKS_PER_PARTITION > 0,
+    s"Number of row blocks per partition should be larger than 0, " +
     s"but found $ROW_BLKS_PER_PARTITION")
-  require(COL_BLKS_PER_PARTITION > 0, s"Number of col blocks per partition should be larger than 0, " +
+  require(COL_BLKS_PER_PARTITION > 0,
+    s"Number of col blocks per partition should be larger than 0, " +
     s"but found $COL_BLKS_PER_PARTITION")
 
   private val row_partition_num = math.ceil(ROW_BLKS * 1.0 / ROW_BLKS_PER_PARTITION).toInt
@@ -33,8 +52,10 @@ class BlockCyclicPartitioner(val ROW_BLKS: Int,
 
   override def getPartition(key: Any): Int = {
     key match {
-      case (i: Int, j : Int) => ((i % num_row_part) * col_partition_num + (j % num_col_part)) % numPartitions
-      case (i: Int, j: Int, _: Int) => ((i % num_row_part) * col_partition_num + (j % num_col_part)) % numPartitions
+      case (i: Int, j : Int) =>
+        ((i % num_row_part) * col_partition_num + (j % num_col_part)) % numPartitions
+      case (i: Int, j: Int, _: Int) =>
+        ((i % num_row_part) * col_partition_num + (j % num_col_part)) % numPartitions
       case _ => throw new IllegalArgumentException(s"Unrecognized key: $key")
     }
   }

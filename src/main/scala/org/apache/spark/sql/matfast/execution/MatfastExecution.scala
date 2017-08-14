@@ -1,19 +1,33 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast.execution
 
-import org.apache.spark.SparkException
-import org.apache.spark.sql.matfast.matrix._
-import org.apache.spark.sql.matfast.util._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.SparkException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.partitioner.BlockCyclicPartitioner
+import org.apache.spark.sql.matfast.util._
 
 import scala.collection.mutable.ArrayBuffer
 
-/**
-  * Created by yongyangyu on 2/28/17.
-  */
 case class MatrixTransposeExecution(child: SparkPlan) extends MatfastPlan {
 
   override def output: Seq[Attribute] = child.output
@@ -140,7 +154,7 @@ case class ColumnSumDirectExecution(child: SparkPlan) extends MatfastPlan {
           if (!sp.isTransposed) { // CSC format
             val arr = new Array[Double](sp.numCols)
             for (i <- 0 until sp.colPtrs.length - 1) {
-              for (j <- 0 until sp.colPtrs(i+1) - sp.colPtrs(i)) {
+              for (j <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
                 arr(i) += sp.values(i + j)
               }
             }
@@ -149,8 +163,8 @@ case class ColumnSumDirectExecution(child: SparkPlan) extends MatfastPlan {
             val arr = new Array[Double](sp.numRows)
             val colIdx = sp.rowIndices
             val rowPtrs = sp.colPtrs
-            for (i <-  0 until rowPtrs.length - 1) {
-              for (j <- 0 until rowPtrs(i+1) - rowPtrs(i)) {
+            for (i <- 0 until rowPtrs.length - 1) {
+              for (j <- 0 until rowPtrs(i + 1) - rowPtrs(i)) {
                 arr(i) += sp.values(i + j)
               }
             }
@@ -271,7 +285,8 @@ case class MatrixPowerExecution(child: SparkPlan, alpha: Double) extends Matfast
   }
 }
 
-case class VectorizeExecution(child: SparkPlan, nrows: Long, ncols: Long, blkSize: Int) extends MatfastPlan {
+case class VectorizeExecution(child: SparkPlan,
+                              nrows: Long, ncols: Long, blkSize: Int) extends MatfastPlan {
 
   override def output: Seq[Attribute] = child.output
 
@@ -320,22 +335,27 @@ case class MatrixElementAddExecution(left: SparkPlan,
   override def children: Seq[SparkPlan] = Seq(left, right)
 
   protected override def doExecute(): RDD[InternalRow] = {
-    require(leftRowNum == rightRowNum, s"Row number not match, leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
-    require(leftColNum == rightColNum, s"Col number not match, leftColNum = $leftColNum, rightColNum = $rightColNum")
+    require(leftRowNum == rightRowNum, s"Row number not match, " +
+      s"leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
+    require(leftColNum == rightColNum, s"Col number not match, " +
+      s"leftColNum = $leftColNum, rightColNum = $rightColNum")
     val rdd1 = left.execute()
     val rdd2 = right.execute()
     if (rdd1.partitioner != None) {
       val part = rdd1.partitioner.get
-      MatfastExecutionHelper.addWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.addWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     } else if (rdd2.partitioner != None) {
       val part = rdd2.partitioner.get
-      MatfastExecutionHelper.addWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.addWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     } else {
       val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
       val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
-      MatfastExecutionHelper.addWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.addWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     }
   }
@@ -354,22 +374,27 @@ case class MatrixElementMultiplyExecution(left: SparkPlan,
   override def children: Seq[SparkPlan] = Seq(left, right)
 
   protected override def doExecute(): RDD[InternalRow] = {
-    require(leftRowNum == rightRowNum, s"Row number not match, leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
-    require(leftColNum == rightColNum, s"Col number not match, leftColNum = $leftColNum, rightColNum = $rightColNum")
+    require(leftRowNum == rightRowNum, s"Row number not match, " +
+      s"leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
+    require(leftColNum == rightColNum, s"Col number not match, " +
+      s"leftColNum = $leftColNum, rightColNum = $rightColNum")
     val rdd1 = left.execute()
     val rdd2 = right.execute()
     if (rdd1.partitioner != None) {
       val part = rdd1.partitioner.get
-      MatfastExecutionHelper.multiplyWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.multiplyWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     } else if (rdd2.partitioner != None) {
       val part = rdd2.partitioner.get
-      MatfastExecutionHelper.multiplyWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.multiplyWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     } else {
       val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
       val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
-      MatfastExecutionHelper.multiplyWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.multiplyWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     }
   }
@@ -388,22 +413,27 @@ case class MatrixElementDivideExecution(left: SparkPlan,
   override def children: Seq[SparkPlan] = Seq(left, right)
 
   protected override def doExecute(): RDD[InternalRow] = {
-    require(leftRowNum == rightRowNum, s"Row number not match, leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
-    require(leftColNum == rightColNum, s"Col number not match, leftColNum = $leftColNum, rightColNum = $rightColNum")
+    require(leftRowNum == rightRowNum, s"Row number not match, " +
+      s"leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
+    require(leftColNum == rightColNum, s"Col number not match, " +
+      s"leftColNum = $leftColNum, rightColNum = $rightColNum")
     val rdd1 = left.execute()
     val rdd2 = right.execute()
     if (rdd1.partitioner != None) {
       val part = rdd1.partitioner.get
-      MatfastExecutionHelper.divideWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.divideWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     } else if (rdd2.partitioner != None) {
       val part = rdd2.partitioner.get
-      MatfastExecutionHelper.divideWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.divideWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     } else {
       val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
       val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
-      MatfastExecutionHelper.divideWithPartitioner(MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+      MatfastExecutionHelper.divideWithPartitioner(
+        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
         MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
     }
   }
@@ -423,10 +453,15 @@ case class MatrixMatrixMultiplicationExecution(left: SparkPlan,
 
   protected override def doExecute(): RDD[InternalRow] = {
     // check for multiplication possibility
-    require(leftColNum == rightRowNum, s"Matrix dimension not match, leftColNum = $leftColNum, rightRowNum = $rightRowNum")
+    require(leftColNum == rightRowNum, s"Matrix dimension not match, " +
+      s"leftColNum = $leftColNum, rightRowNum = $rightRowNum")
     // estimate memory usage
     val memoryUsage = leftRowNum * rightColNum * 8 / (1024 * 1024 * 1024) * 1.0
-    if (memoryUsage > 10) println(s"Caution: matrix multiplication result size = $memoryUsage GB")
+    if (memoryUsage > 10) {
+      // scalastyle:off
+      println(s"Caution: matrix multiplication result size = $memoryUsage GB")
+      // scalastyle:on
+    }
     // compute number of row/col blocks for invoking special matrix multiplication procedure
     val leftColBlkNum = math.ceil(leftColNum * 1.0 / blkSize).toInt
     val rightRowBlkNum = math.ceil(rightRowNum * 1.0 / blkSize).toInt
@@ -458,7 +493,8 @@ case class RankOneUpdateExecution(left: SparkPlan,
 
   protected override def doExecute(): RDD[InternalRow] = {
     require(rightRowNum == 1, s"Vector column size is not 1, but #cols = $rightRowNum")
-    require(leftRowNum == rightRowNum, s"Dimension not match for matrix addition, A.nrows = $leftRowNum, " +
+    require(leftRowNum == rightRowNum, s"Dimension not match for matrix addition, " +
+      s"A.nrows = $leftRowNum, " +
     s"A.ncols = ${leftColNum}, B.nrows = $rightRowNum, B.ncols = $rightColNum")
     MatfastExecutionHelper.matrixRankOneUpdate(left.execute(), right.execute())
   }

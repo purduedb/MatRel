@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.matfast.execution
 
+import scala.collection.mutable.ArrayBuffer
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
@@ -26,7 +28,6 @@ import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.partitioner.BlockCyclicPartitioner
 import org.apache.spark.sql.matfast.util._
 
-import scala.collection.mutable.ArrayBuffer
 
 case class MatrixTransposeExecution(child: SparkPlan) extends MatfastPlan {
 

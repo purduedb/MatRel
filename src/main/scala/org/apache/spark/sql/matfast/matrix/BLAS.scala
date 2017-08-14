@@ -1,6 +1,3 @@
-package org.apache.spark.sql.matfast.matrix
-
-// export APIs from mllib for in-place operations
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -18,14 +15,16 @@ package org.apache.spark.sql.matfast.matrix
  * limitations under the License.
  */
 
-import com.github.fommil.netlib.BLAS.{getInstance => NativeBLAS}
+package org.apache.spark.sql.matfast.matrix
+
+// export APIs from mllib for in-place operations
 import com.github.fommil.netlib.{BLAS => NetlibBLAS, F2jBLAS}
+import com.github.fommil.netlib.BLAS.{getInstance => NativeBLAS}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
 
-/**
-  * BLAS routines for MLlib's vectors and matrices.
-  */
+// BLAS routines for MLlib's vectors and matrices.
 object BLAS extends Serializable with Logging {
 
   @transient private var _f2jBLAS: NetlibBLAS = _
@@ -370,7 +369,7 @@ object BLAS extends Serializable with Logging {
     val AcolPtrs = A.colPtrs
 
     // Slicing is easy in this case. This is the optimal multiplication setting for sparse matrices
-    if (A.isTransposed){
+    if (A.isTransposed) {
       var colCounterForB = 0
       if (!B.isTransposed) { // Expensive to put the check inside the loop
         while (colCounterForB < nB) {

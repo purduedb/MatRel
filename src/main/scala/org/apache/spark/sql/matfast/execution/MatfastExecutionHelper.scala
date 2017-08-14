@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast.execution
 
 import org.apache.spark.Partitioner
@@ -8,11 +25,11 @@ import org.apache.spark.sql.matfast.matrix.{LocalMatrix, MatrixBlock}
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, IndexPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
 
+// scalastyle:off
 import scala.collection.concurrent.TrieMap
+// scalastyle:on
 
-/**
-  * Created by yongyangyu on 3/14/17.
-  */
+
 object MatfastExecutionHelper {
 
   def repartitionWithTargetPartitioner(partitioner: Partitioner,
@@ -20,7 +37,8 @@ object MatfastExecutionHelper {
     partitioner match {
       case rowPart: RowPartitioner => RowPartitioner(rdd, rowPart.numPartitions)
       case colPart: ColumnPartitioner => ColumnPartitioner(rdd, colPart.numPartitions)
-      case cyclicPart: BlockCyclicPartitioner => BlockCyclicPartitioner(rdd, cyclicPart.ROW_BLKS, cyclicPart.COL_BLKS,
+      case cyclicPart: BlockCyclicPartitioner =>
+        BlockCyclicPartitioner(rdd, cyclicPart.ROW_BLKS, cyclicPart.COL_BLKS,
         cyclicPart.ROW_BLKS_PER_PARTITION, cyclicPart.COL_BLKS_PER_PARTITION)
       case _ => throw new IllegalArgumentException(s"Partitioner not recognized for $partitioner")
     }
@@ -55,7 +73,8 @@ object MatfastExecutionHelper {
           if (!buf.contains(idx)) buf.putIfAbsent(idx, a._2)
           else {
             val old = buf.get(idx).get
-            val res = LocalMatrix.add(MLMatrixSerializer.deserialize(old), MLMatrixSerializer.deserialize(a._2))
+            val res = LocalMatrix.add(MLMatrixSerializer.deserialize(old),
+              MLMatrixSerializer.deserialize(a._2))
             buf.put(idx, MLMatrixSerializer.serialize(res))
           }
         }
@@ -66,7 +85,8 @@ object MatfastExecutionHelper {
           if (!buf.contains(idx)) buf.putIfAbsent(idx, b._2)
           else {
             val old = buf.get(idx).get
-            val res = LocalMatrix.add(MLMatrixSerializer.deserialize(old), MLMatrixSerializer.deserialize(b._2))
+            val res = LocalMatrix.add(MLMatrixSerializer.deserialize(old),
+              MLMatrixSerializer.deserialize(b._2))
             buf.put(idx, MLMatrixSerializer.serialize(res))
           }
         }
@@ -99,7 +119,8 @@ object MatfastExecutionHelper {
           val key = elem._1
           if (idx2val.contains(key)) {
             val tmp = idx2val.get(key).get
-            val product = MLMatrixSerializer.serialize(LocalMatrix.elementWiseMultiply(MLMatrixSerializer.deserialize(tmp),
+            val product = MLMatrixSerializer.serialize(
+              LocalMatrix.elementWiseMultiply(MLMatrixSerializer.deserialize(tmp),
               MLMatrixSerializer.deserialize(elem._2)))
             res.putIfAbsent(key, product)
           }
@@ -132,7 +153,8 @@ object MatfastExecutionHelper {
         val key = elem._1
         if (idx2val.contains(key)) {
           val tmp = idx2val.get(key).get
-          val division = MLMatrixSerializer.serialize(LocalMatrix.elementWiseDivide(MLMatrixSerializer.deserialize(tmp),
+          val division = MLMatrixSerializer.serialize(
+            LocalMatrix.elementWiseDivide(MLMatrixSerializer.deserialize(tmp),
             MLMatrixSerializer.deserialize(elem._2)))
           res.putIfAbsent(key, division)
         }
@@ -151,7 +173,8 @@ object MatfastExecutionHelper {
     }
   }
 
-  def multiplyOuterProductDuplicateLeft(rdd1: RDD[InternalRow], rdd2: RDD[InternalRow]): RDD[InternalRow] = {
+  def multiplyOuterProductDuplicateLeft(rdd1: RDD[InternalRow],
+                                        rdd2: RDD[InternalRow]): RDD[InternalRow] = {
     val numPartitions = rdd2.partitions.length
     val rightRDD = repartitionWithTargetPartitioner(new ColumnPartitioner(numPartitions), rdd2)
     val dupRDD = duplicateCrossPartitions(rdd1, numPartitions)
@@ -160,7 +183,8 @@ object MatfastExecutionHelper {
       for {
         x2 <- iter2
         x1 <- dup
-      } yield ((x1.rid, x2._1._2), LocalMatrix.matrixMultiplication(x1.matrix, MLMatrixSerializer.deserialize(x2._2)))
+      } yield ((x1.rid, x2._1._2),
+        LocalMatrix.matrixMultiplication(x1.matrix, MLMatrixSerializer.deserialize(x2._2)))
     }.map { row =>
       val rid = row._1._1
       val cid = row._1._2
@@ -173,7 +197,8 @@ object MatfastExecutionHelper {
     }
   }
 
-  def multiplyOuterProductDuplicateRight(rdd1: RDD[InternalRow], rdd2: RDD[InternalRow]): RDD[InternalRow] = {
+  def multiplyOuterProductDuplicateRight(rdd1: RDD[InternalRow],
+                                         rdd2: RDD[InternalRow]): RDD[InternalRow] = {
     val numPartitions = rdd1.partitions.length
     val leftRDD = repartitionWithTargetPartitioner(new RowPartitioner(numPartitions), rdd1)
     val dupRDD = duplicateCrossPartitions(rdd2, numPartitions)
@@ -182,7 +207,8 @@ object MatfastExecutionHelper {
       for {
         x1 <- iter1
         x2 <- dup
-      } yield ((x1._1._1, x2.cid), LocalMatrix.matrixMultiplication(MLMatrixSerializer.deserialize(x1._2), x2.matrix))
+      } yield ((x1._1._1, x2.cid),
+        LocalMatrix.matrixMultiplication(MLMatrixSerializer.deserialize(x1._2), x2.matrix))
     }.map { row =>
       val rid = row._1._1
       val cid = row._1._2
@@ -196,7 +222,8 @@ object MatfastExecutionHelper {
   }
 
   // duplicate the matrix for #partitions copies and distribute them over the cluster
-  private def duplicateCrossPartitions(rdd: RDD[InternalRow], numPartitions: Int): RDD[(Int, Iterable[MatrixBlock])] = {
+  private def duplicateCrossPartitions(rdd: RDD[InternalRow],
+                                       numPartitions: Int): RDD[(Int, Iterable[MatrixBlock])] = {
     rdd.flatMap { row =>
       val rid = row.getInt(0)
       val cid = row.getInt(1)
@@ -247,7 +274,8 @@ object MatfastExecutionHelper {
         x3 <- dup
         if (x1.getInt(0) == x2.rid && x1.getInt(1) == x3.rid)
       } yield (x1.getInt(0), x1.getInt(1),
-        LocalMatrix.rankOneAdd(MLMatrixSerializer.deserialize(x1.getStruct(2, 7)), x2.matrix, x3.matrix))
+        LocalMatrix.rankOneAdd(MLMatrixSerializer.deserialize(
+          x1.getStruct(2, 7)), x2.matrix, x3.matrix))
     }.map { row =>
       val res = new GenericInternalRow(3)
       res.setInt(0, row._1)

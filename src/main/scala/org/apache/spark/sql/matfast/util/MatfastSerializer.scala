@@ -1,23 +1,39 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast.util
 
 import java.math.BigDecimal
 import java.nio.ByteBuffer
 import java.util.{HashMap => JavaHashMap}
 
-import com.esotericsoftware.kryo.io.{Input, Output}
-import com.esotericsoftware.kryo.{Kryo, Serializer}
-import com.twitter.chill.ResourcePool
-import org.apache.spark.{SparkConf, SparkEnv}
-import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
-import org.apache.spark.sql.types.Decimal
-import org.apache.spark.util.MutablePair
-import org.apache.spark.sql.matfast.matrix._
-
 import scala.reflect.ClassTag
 
-/**
-  * Created by yongyangyu on 2/21/17.
-  */
+import com.esotericsoftware.kryo.{Kryo, Serializer}
+import com.esotericsoftware.kryo.io.{Input, Output}
+import com.twitter.chill.ResourcePool
+
+import org.apache.spark.{SparkConf, SparkEnv}
+import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
+import org.apache.spark.sql.matfast.matrix._
+import org.apache.spark.sql.types.Decimal
+import org.apache.spark.util.MutablePair
+
+
 private[matfast] class MatfastSerializer(conf: SparkConf) extends KryoSerializer(conf) {
   override def newKryo(): Kryo = {
     val kryo = super.newKryo()
@@ -60,13 +76,13 @@ private[matfast] object MatfastSerializer {
   }
 
   def serialize[T: ClassTag](o: T): Array[Byte] = {
-    acquireRelease { k=>
+    acquireRelease { k =>
       k.serialize(o).array()
     }
   }
 
   def deserialize[T: ClassTag](bytes: Array[Byte]): T =
-    acquireRelease { k=>
+    acquireRelease { k =>
       k.deserialize[T](ByteBuffer.wrap(bytes))
     }
 }

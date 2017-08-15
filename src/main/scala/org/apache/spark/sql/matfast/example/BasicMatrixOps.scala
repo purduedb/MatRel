@@ -85,7 +85,7 @@ object BasicMatrixOps {
     val seq1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
     val seq2 = Seq(MatrixBlock(0, 0, s1), MatrixBlock(0, 1, b3)).toDS()
     import spark.MatfastImplicits._
-    seq1.addElement(4, 4, seq2.toDF(), 4, 4, 2).rdd.foreach { row =>
+    seq1.addElement(4, 4, seq2, 4, 4, 2).rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":")
@@ -93,7 +93,7 @@ object BasicMatrixOps {
     }
     println("-----------------")
     // scalastyle:on
-    seq1.multiplyElement(4, 4, seq2.toDF(), 4, 4, 2).rdd.foreach { row =>
+    seq1.multiplyElement(4, 4, seq2, 4, 4, 2).rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":")
@@ -113,7 +113,7 @@ object BasicMatrixOps {
     val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
     val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
     import spark.MatfastImplicits._
-    mat1.matrixMultiply(4, 4, mat2.toDF(), 4, 4, 2).rdd.foreach { row =>
+    mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":")
@@ -151,7 +151,9 @@ object BasicMatrixOps {
       Array[Int](1, 0), Array[Double](4, 2))
     val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
     val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
+
     import spark.MatfastImplicits._
+
     val mat1_rowsum = mat1.t().rowSum(4, 4)
     mat1_rowsum.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
@@ -161,6 +163,14 @@ object BasicMatrixOps {
     }
     val mat2_colsum = mat2.colSum(4, 4)
     mat2_colsum.rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+
+    val product_trace = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).trace(4, 4)
+    product_trace.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])

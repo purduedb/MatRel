@@ -20,7 +20,7 @@ package org.apache.spark.sql.matfast.plans
 import org.apache.spark.sql.catalyst.expressions.{Attribute}
 import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LogicalPlan, UnaryNode}
 
-case class TranposeOperator(child: LogicalPlan) extends UnaryNode {
+case class TransposeOperator(child: LogicalPlan) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }
 
@@ -43,6 +43,13 @@ case class ColumnSumOperator(child: LogicalPlan,
 case class SumOperator(child: LogicalPlan,
                        nrows: Long,
                        ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes trace of the matrix, i.e., compute the summation of the diagonal of a square matrix
+case class TraceOperator(child: LogicalPlan,
+                         nrows: Long,
+                         ncols: Long) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }
 

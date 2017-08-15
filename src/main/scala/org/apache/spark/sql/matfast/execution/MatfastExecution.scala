@@ -217,6 +217,68 @@ case class SumDirectExecution(child: SparkPlan) extends MatfastPlan {
   }
 }
 
+
+case class TraceDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      val matrix = MLMatrixSerializer.deserialize(matrixInternalRow)
+      ((rid, cid), matrix)
+    }
+    val traceRdd = rdd.filter(tuple => tuple._1._1 == tuple._1._2).map { row =>
+      val localTrace = row._2 match {
+        case den: DenseMatrix =>
+          val rowNum = den.numRows
+          val colNum = den.numCols
+          require(rowNum == colNum, s"block is not square, row_num=$rowNum, col_num=$colNum")
+          val values = den.values
+          // trace is invariant under the transpose operation
+          // just compute in a uniform way
+          var tr = 0.0
+          for (j <- 0 until colNum) {
+            tr += values(j * colNum + j)
+          }
+          val trMat = new DenseMatrix(1, 1, Array[Double](tr))
+          (0, trMat.asInstanceOf[MLMatrix])
+        case sp: SparseMatrix =>
+          // similar to the dense case, no need to distinguish CSC or CSR format
+          var tr = 0.0
+          val values = sp.values
+          val rowIndices = sp.rowIndices
+          val colPtrs = sp.colPtrs
+          for (j <- 0 until sp.numCols) {
+            for (k <- 0 until colPtrs(j + 1) - colPtrs(j)) {
+              if (rowIndices(k + colPtrs(j)) == j) {
+                tr += values(k + colPtrs(j))
+              }
+            }
+          }
+          val trMat = new DenseMatrix(1, 1, Array[Double](tr))
+          (0, trMat.asInstanceOf[MLMatrix])
+        case _ =>
+          throw new SparkException("Undefined matrix type in TraceDirectExecute()")
+      }
+      localTrace
+    }.reduceByKey(LocalMatrix.add(_, _))
+
+    traceRdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
 case class MatrixScalarAddExecution(child: SparkPlan, alpha: Double) extends MatfastPlan {
 
   override def output: Seq[Attribute] = child.output

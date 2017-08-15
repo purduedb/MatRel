@@ -20,8 +20,9 @@ package org.apache.spark.sql.matfast
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.{matfast, Dataset => SQLDataSet, Encoder, Row}
+import org.apache.spark.sql.{Encoder, Row, Dataset => SQLDataSet}
 import org.apache.spark.sql.execution.QueryExecution
+import org.apache.spark.sql.matfast
 import org.apache.spark.sql.matfast.plans._
 
 
@@ -37,7 +38,7 @@ class Dataset[T] private[matfast]
   def t(): DataFrame = transpose()
 
   def transpose(data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
-    TranposeOperator(this.logicalPlan)
+    TransposeOperator(this.logicalPlan)
   }
 
   def rowSum(nrows: Long, ncols: Long,
@@ -53,6 +54,12 @@ class Dataset[T] private[matfast]
   def sum(nrows: Long, ncols: Long,
           data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     SumOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def trace(nrows: Long, ncols: Long,
+            data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    require(nrows == ncols, s"Cannot perform trace() on a rectangle matrix")
+    TraceOperator(this.logicalPlan, nrows, ncols)
   }
 
   def vec(nrows: Long, ncols: Long, blkSize: Int,
@@ -77,7 +84,7 @@ class Dataset[T] private[matfast]
   }
 
   def addElement(leftRowNum: Long, leftColNum: Long,
-                 right: DataFrame,
+                 right: Dataset[_],
                  rightRowNum: Long, rightColNum: Long,
                  blkSize: Int,
                  data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
@@ -86,7 +93,7 @@ class Dataset[T] private[matfast]
   }
 
   def multiplyElement(leftRowNum: Long, leftColNum: Long,
-                      right: DataFrame,
+                      right: Dataset[_],
                       rightRowNum: Long, rightColNum: Long,
                       blkSize: Int,
                       data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
@@ -96,7 +103,7 @@ class Dataset[T] private[matfast]
   }
 
   def divideElement(leftRowNum: Long, leftColNum: Long,
-                    right: DataFrame,
+                    right: Dataset[_],
                     rightRowNum: Long, rightColNum: Long,
                     blkSize: Int,
                     data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
@@ -106,7 +113,7 @@ class Dataset[T] private[matfast]
   }
 
   def matrixMultiply(leftRowNum: Long, leftColNum: Long,
-                     right: DataFrame,
+                     right: Dataset[_],
                      rightRowNum: Long, rightColNum: Long,
                      blkSize: Int,
                      data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
@@ -116,7 +123,7 @@ class Dataset[T] private[matfast]
   }
 
   def matrixRankOneUpdate(leftRowNum: Long, leftColNum: Long,
-                          right: DataFrame,
+                          right: Dataset[_],
                           rightRowNum: Long, rightColNum: Long,
                           blkSize: Int,
                           data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
@@ -126,7 +133,8 @@ class Dataset[T] private[matfast]
   }
 
   private def getAttributes(keys: Array[String],
-                            attrs: Seq[Attribute] = this.queryExecution.analyzed.output): Array[Attribute] = {
+                            attrs: Seq[Attribute] =
+                            this.queryExecution.analyzed.output): Array[Attribute] = {
     keys.map(key => {
       val tmp = attrs.indexWhere(_.name == key)
       if (tmp >= 0) attrs(tmp)
@@ -140,7 +148,8 @@ class Dataset[T] private[matfast]
 }
 
 private[matfast] object Dataset {
-  def apply[T: Encoder](sparkSession: matfast.MatfastSession, logicalPlan: LogicalPlan): Dataset[T] = {
+  def apply[T: Encoder](sparkSession: matfast.MatfastSession,
+                        logicalPlan: LogicalPlan): Dataset[T] = {
     new Dataset(sparkSession, logicalPlan, implicitly[Encoder[T]])
   }
 

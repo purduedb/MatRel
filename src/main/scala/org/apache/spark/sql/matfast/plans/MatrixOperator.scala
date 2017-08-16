@@ -31,6 +31,15 @@ case class ProjectOperator(child: LogicalPlan,
   override def output: Seq[Attribute] = child.output
 }
 
+case class SelectOperator(child: LogicalPlan,
+                          nrows: Long,
+                          ncols: Long,
+                          blkSize: Int,
+                          rowIdx: Long,
+                          colIdx: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class TransposeOperator(child: LogicalPlan) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }

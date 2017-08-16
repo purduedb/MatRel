@@ -123,6 +123,47 @@ object MatrixOperators extends Strategy {
             ProjectColumnDirectExecution(planLater(child), blkSize, index) :: Nil
         }
       }
+    case SelectOperator(child, nrows, ncols, blkSize, rowIdx, colIdx) =>
+      child match {
+        case TransposeOperator(ch) =>
+          SelectDirectExecution(planLater(ch), blkSize, colIdx, rowIdx) :: Nil
+        case MatrixScalarAddOperator(ch, alpha) =>
+          MatrixScalarAddExecution(planLater(
+            SelectOperator(ch, nrows, ncols, blkSize, rowIdx, colIdx)), alpha) :: Nil
+        case MatrixScalarMultiplyOperator(ch, alpha) =>
+          MatrixScalarMultiplyExecution(planLater(
+            SelectOperator(ch, nrows, ncols, blkSize, rowIdx, colIdx)), alpha) :: Nil
+        case MatrixElementAddOperator(left, leftRowNum, leftColNum,
+        right, rightRowNum, rightColNum, blkSize) =>
+          MatrixElementAddExecution(planLater(
+            SelectOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
+            leftRowNum, leftColNum, planLater(
+            SelectOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
+            rightRowNum, rightColNum, blkSize) :: Nil
+        case MatrixElementMultiplyOperator(left, leftRowNum, leftColNum,
+        right, rightRowNum, rightColNum, blkSize) =>
+          MatrixElementMultiplyExecution(planLater(
+            SelectOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
+            leftRowNum, leftColNum, planLater(
+            SelectOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
+            rightRowNum, rightColNum, blkSize) :: Nil
+        case MatrixElementDivideOperator(left, leftRowNum, leftColNum,
+        right, rightRowNum, rightColNum, blkSize) =>
+          MatrixElementDivideExecution(planLater(
+            SelectOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
+            leftRowNum, leftColNum, planLater(
+            SelectOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
+            rightRowNum, rightColNum, blkSize) :: Nil
+        case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
+        right, rightRowNum, rightColNum, blkSize) =>
+          MatrixMatrixMultiplicationExecution(planLater(
+            ProjectOperator(left, leftRowNum, leftColNum, blkSize, true, rowIdx)),
+            leftRowNum, leftColNum, planLater(
+            ProjectOperator(right, rightRowNum, rightColNum, blkSize, false, colIdx)),
+            rightRowNum, rightColNum, blkSize) :: Nil
+        case _ =>
+          SelectDirectExecution(planLater(child), blkSize, rowIdx, colIdx) :: Nil
+      }
     case TransposeOperator(child) => MatrixTransposeExecution(planLater(child)) :: Nil
     case RowSumOperator(child, nrows, ncols) => child match {
       case TransposeOperator(beforeTrans) =>

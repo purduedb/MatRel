@@ -46,6 +46,14 @@ class Dataset[T] private[matfast]
     ProjectOperator(this.logicalPlan, nrows, ncols, blkSize, rowOrCol, index)
   }
 
+  def selection(nrows: Long, ncols: Long, blkSize: Int,
+             rowIdx: Long, colIdx: Long,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    require(rowIdx < nrows, s"row index should be smaller than #rows, rid=$rowIdx, #rows=$nrows")
+    require(colIdx < ncols, s"col index should be smaller than #cols, cid=$colIdx, #cols=$ncols")
+    SelectOperator(this.logicalPlan, nrows, ncols, blkSize, rowIdx, colIdx)
+  }
+
   def t(): DataFrame = transpose()
 
   def transpose(data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {

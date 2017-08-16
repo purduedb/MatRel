@@ -168,6 +168,50 @@ case class ProjectColumnDirectExecution(child: SparkPlan,
   }
 }
 
+case class SelectDirectExecution(child: SparkPlan,
+                                 blkSize: Int,
+                                 rowIdx: Long,
+                                 colIdx: Long) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rowblkID = (rowIdx / blkSize).toInt
+    val colblkID = (colIdx / blkSize).toInt
+    val rowOffset = (rowIdx % blkSize).toInt
+    val colOffset = (colIdx % blkSize).toInt
+    val rootRdd = child.execute()
+    val blk = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      ((rid, cid), MLMatrixSerializer.deserialize(matrixInternalRow))
+    }.filter(tuple => tuple._1 == (rowblkID, colblkID))
+    val rdd = blk.map { tuple =>
+      val matrix = tuple._2
+      matrix match {
+        case den: DenseMatrix =>
+          val matBlk = new DenseMatrix(1, 1, Array(den.apply(rowOffset, colOffset)))
+          ((0, 0), matBlk.asInstanceOf[MLMatrix])
+        case sp: SparseMatrix =>
+          val matBlk = new DenseMatrix(1, 1, Array(sp.apply(rowOffset, colOffset)))
+          ((0, 0), matBlk.asInstanceOf[MLMatrix])
+        case _ =>
+          throw new SparkException("Undefined matrix type in SelectDirectExecute()")
+      }
+    }
+    rdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, blk._1._1)
+      res.setInt(1, blk._1._2)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
 case class MatrixTransposeExecution(child: SparkPlan) extends MatfastPlan {
 
   override def output: Seq[Attribute] = child.output

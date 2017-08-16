@@ -32,7 +32,8 @@ object BasicMatrixOps {
     // runMatrixScalar(matfastSession)
     // runMatrixElement(matfastSession)
     // runMatrixMultiplication(matfastSession)
-    runMatrixAggregation(matfastSession)
+    // runMatrixAggregation(matfastSession)
+    runMatrixProjection(matfastSession)
     matfastSession.stop()
   }
 
@@ -171,6 +172,44 @@ object BasicMatrixOps {
 
     val product_trace = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).trace(4, 4)
     product_trace.rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+  }
+
+  private def runMatrixProjection(spark: MatfastSession): Unit = {
+    import spark.implicits._
+    val b1 = new DenseMatrix(2, 2, Array[Double](1, 1, 2, 2))
+    val b2 = new DenseMatrix(2, 2, Array[Double](2, 2, 3, 3))
+    val b3 = new DenseMatrix(2, 2, Array[Double](3, 3, 4, 4))
+    val b4 = new DenseMatrix(2, 2, Array[Double](4, 5, 6, 7))
+    val s1 = new SparseMatrix(2, 2, Array[Int](0, 1, 2),
+      Array[Int](1, 0), Array[Double](4, 2))
+    val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
+    val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
+
+    import spark.MatfastImplicits._
+
+    val mat1_proj_row = mat1.project(4, 4, 2, true, 2)
+    mat1_proj_row.rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+
+    val mat2_proj_col = mat2.project(4, 4, 2, false, 3)
+    mat2_proj_col.rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+
+    val mat2_X_mat2_col = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).project(4, 4, 2, false, 3)
+    mat2_X_mat2_col.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])

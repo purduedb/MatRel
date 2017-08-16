@@ -28,6 +28,145 @@ import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.partitioner.BlockCyclicPartitioner
 import org.apache.spark.sql.matfast.util._
 
+case class ProjectRowDirectExecution(child: SparkPlan,
+                                     blkSize: Int,
+                                     index: Long) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rowblkID = (index / blkSize).toInt
+    val offset = (index % blkSize).toInt
+    val rootRdd = child.execute()
+    val rowBlks = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      (rid, (cid, MLMatrixSerializer.deserialize(matrixInternalRow)))
+    }.filter(tuple => tuple._1 == rowblkID)
+    val rdd = rowBlks.map { tuple =>
+      val cid = tuple._2._1
+      val matrix = tuple._2._2
+      matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) { // stored in the column orientation
+            val resRow = Array.fill(den.numCols)(0.0)
+            for (i <- 0 until resRow.length)  {
+              resRow(i) = den.values(offset + i * den.numRows)
+            }
+            val matBlk = new DenseMatrix(1, resRow.length, resRow)
+            ((0, cid), matBlk.asInstanceOf[MLMatrix])
+          } else { // stored in the row orientation
+            val resRow = Array.fill(den.numRows)(0.0)
+            for (i <- 0 until resRow.length) {
+              resRow(i) = den.values(offset + i * den.numCols)
+            }
+            val matBlk = new DenseMatrix(1, resRow.length, resRow)
+            ((0, cid), matBlk.asInstanceOf[MLMatrix])
+          }
+        case sp: SparseMatrix =>
+          // Choosing a row in CSC is the same as choosing a column in CSR
+          var resValues = ArrayBuffer[Double]()
+          var resColPtrs = ArrayBuffer[Int]()
+          var cnt = 0
+          for (j <- 0 until sp.colPtrs.length - 1) {
+            for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+              if (offset == sp.rowIndices(k + sp.colPtrs(j))) {
+                resValues += sp.values(k + sp.colPtrs(j))
+                cnt += 1
+              }
+            }
+            if (j == 0) {
+              resColPtrs += 0
+            } else {
+              resColPtrs += resColPtrs(j - 1) + cnt
+            }
+          }
+          resColPtrs += resValues.length
+          val resRowIndices = Array.fill(resValues.length)(offset)
+          val matBlk = new SparseMatrix(1, sp.numCols, resColPtrs.toArray,
+            resRowIndices, resValues.toArray)
+          ((0, cid), matBlk.asInstanceOf[MLMatrix])
+        case _ =>
+          throw new SparkException("Undefined matrix type in ProjectRowDirectExecute()")
+      }
+    }
+    rdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, blk._1._1)
+      res.setInt(1, blk._1._2)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class ProjectColumnDirectExecution(child: SparkPlan,
+                                        blkSize: Int,
+                                        index: Long) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val colblkID = (index / blkSize).toInt
+    val offset = (index % blkSize).toInt
+    val rootRdd = child.execute()
+    val colBlks = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      (cid, (rid, MLMatrixSerializer.deserialize(matrixInternalRow)))
+    }.filter(tuple => tuple._1  == colblkID)
+    val rdd = colBlks.map { tuple =>
+      val rid = tuple._2._1
+      val matrix = tuple._2._2
+      matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) { // stored in the column orientation
+            val resCol = Array.fill(den.numRows)(0.0)
+            for (i <- 0 until resCol.length) {
+              resCol(i) = den.values(offset * den.numRows + i)
+            }
+            val matBlk = new DenseMatrix(resCol.length, 1, resCol)
+            ((rid, 0), matBlk.asInstanceOf[MLMatrix])
+          } else { // stored in the row orientation
+            val resCol = Array.fill(den.numCols)(0.0)
+            for (i <- 0 until resCol.length) {
+              resCol(i) = den.values(offset * den.numCols + i)
+            }
+            val matBlk = new DenseMatrix(resCol.length, 1, resCol)
+            ((rid, 0), matBlk.asInstanceOf[MLMatrix])
+          }
+        case sp: SparseMatrix =>
+          // Choosing a column in CSC is the same as choosing a row in CSR
+          var resValues = ArrayBuffer[Double]()
+          var resRowIndices = ArrayBuffer[Int]()
+          val resColPtrs = Array[Int](0, sp.colPtrs(offset + 1) - sp.colPtrs(offset))
+          for (i <- 0 until sp.colPtrs(offset + 1) - sp.colPtrs(offset)) {
+            val k = i + sp.colPtrs(offset)
+            resValues += sp.values(k)
+            resRowIndices += sp.rowIndices(k)
+          }
+          val matBlk = new SparseMatrix(sp.numRows, 1, resColPtrs,
+            resRowIndices.toArray, resValues.toArray)
+          ((rid, 0), matBlk.asInstanceOf[MLMatrix])
+        case _ =>
+          throw new SparkException("Undefined matrix type in ProjectColumnDirectExecute()")
+      }
+    }
+    rdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, blk._1._1)
+      res.setInt(1, blk._1._2)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
 
 case class MatrixTransposeExecution(child: SparkPlan) extends MatfastPlan {
 

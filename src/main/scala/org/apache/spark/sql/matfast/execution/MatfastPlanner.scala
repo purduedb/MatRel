@@ -41,6 +41,88 @@ class MatfastPlanner(val matfastContext: MatfastSession,
 
 object MatrixOperators extends Strategy {
   def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
+    case ProjectOperator(child, nrows, ncols, blkSize, rowOrCol, index) =>
+      if (rowOrCol) {
+        child match {
+          case TransposeOperator(ch) =>
+            ProjectColumnDirectExecution(planLater(ch), blkSize, index) :: Nil
+          case MatrixScalarAddOperator(ch, alpha) =>
+            MatrixScalarAddExecution(planLater(
+              ProjectOperator(ch, nrows, ncols, blkSize, rowOrCol, index)), alpha) :: Nil
+          case MatrixScalarMultiplyOperator(ch, alpha) =>
+            MatrixScalarMultiplyExecution(planLater(
+              ProjectOperator(ch, nrows, ncols, blkSize, rowOrCol, index)), alpha) :: Nil
+          case MatrixElementAddOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixElementAddExecution(planLater(
+              ProjectOperator(left, leftRowNum, leftColNum, blkSize, rowOrCol, index)),
+              leftRowNum, leftColNum, planLater(
+              ProjectOperator(right, rightRowNum, rightColNum, blkSize, rowOrCol, index)),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case MatrixElementMultiplyOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixElementMultiplyExecution(planLater(
+              ProjectOperator(left, leftRowNum, leftColNum, blkSize, rowOrCol, index)),
+              leftRowNum, leftColNum, planLater(
+              ProjectOperator(right, rightRowNum, rightColNum, blkSize, rowOrCol, index)),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case MatrixElementDivideOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixElementDivideExecution(planLater(
+              ProjectOperator(left, leftRowNum, leftColNum, blkSize, rowOrCol, index)),
+              leftRowNum, leftColNum, planLater(
+              ProjectOperator(right, rightRowNum, rightColNum, blkSize, rowOrCol, index)),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixMatrixMultiplicationExecution(planLater(
+              ProjectOperator(left, leftRowNum, leftColNum, blkSize, rowOrCol, index)),
+              leftRowNum, leftColNum, planLater(right),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case _ =>
+            ProjectRowDirectExecution(planLater(child), blkSize, index) :: Nil
+        }
+      } else {
+        child match {
+          case TransposeOperator(ch) =>
+            ProjectRowDirectExecution(planLater(ch), blkSize, index) :: Nil
+          case MatrixScalarAddOperator(ch, alpha) =>
+            MatrixScalarAddExecution(planLater(
+              ProjectOperator(ch, nrows, ncols, blkSize, rowOrCol, index)), alpha) :: Nil
+          case MatrixScalarMultiplyOperator(ch, alpha) =>
+            MatrixScalarMultiplyExecution(planLater(
+              ProjectOperator(ch, nrows, ncols, blkSize, rowOrCol, index)), alpha) :: Nil
+          case MatrixElementAddOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixElementAddExecution(planLater(
+              ProjectOperator(left, leftRowNum, leftColNum, blkSize, rowOrCol, index)),
+              leftRowNum, leftColNum, planLater(
+                ProjectOperator(right, rightRowNum, rightColNum, blkSize, rowOrCol, index)),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case MatrixElementMultiplyOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixElementMultiplyExecution(planLater(
+              ProjectOperator(left, leftRowNum, leftColNum, blkSize, rowOrCol, index)),
+              leftRowNum, leftColNum, planLater(
+                ProjectOperator(right, rightRowNum, rightColNum, blkSize, rowOrCol, index)),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case MatrixElementDivideOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixElementDivideExecution(planLater(
+              ProjectOperator(left, leftRowNum, leftColNum, blkSize, rowOrCol, index)),
+              leftRowNum, leftColNum, planLater(
+                ProjectOperator(right, rightRowNum, rightColNum, blkSize, rowOrCol, index)),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
+          right, rightRowNum, rightColNum, blkSize) =>
+            MatrixMatrixMultiplicationExecution(planLater(left),
+              leftRowNum, leftColNum, planLater(
+              ProjectOperator(right, rightRowNum, rightColNum, blkSize, rowOrCol, index)),
+              rightRowNum, rightColNum, blkSize) :: Nil
+          case _ =>
+            ProjectColumnDirectExecution(planLater(child), blkSize, index) :: Nil
+        }
+      }
     case TransposeOperator(child) => MatrixTransposeExecution(planLater(child)) :: Nil
     case RowSumOperator(child, nrows, ncols) => child match {
       case TransposeOperator(beforeTrans) =>

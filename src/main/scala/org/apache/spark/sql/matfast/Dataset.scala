@@ -35,6 +35,17 @@ class Dataset[T] private[matfast]
     this(sparkSession, sparkSession.sessionState.executePlan(logicalPlan), encoder)
   }
 
+  def project(nrows: Long, ncols: Long, blkSize: Int,
+              rowOrCol: Boolean, index: Long,
+              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    if (rowOrCol) {
+      require(index < nrows, s"row index should be smaller than #rows, index=$index, #rows=$nrows")
+    } else {
+      require(index < ncols, s"col index should be smaller than #cols, index=$index, #cols=$ncols")
+    }
+    ProjectOperator(this.logicalPlan, nrows, ncols, blkSize, rowOrCol, index)
+  }
+
   def t(): DataFrame = transpose()
 
   def transpose(data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {

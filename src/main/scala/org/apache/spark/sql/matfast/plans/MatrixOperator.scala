@@ -20,6 +20,17 @@ package org.apache.spark.sql.matfast.plans
 import org.apache.spark.sql.catalyst.expressions.{Attribute}
 import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LogicalPlan, UnaryNode}
 
+// Project a row or column from a given matrix
+// rowOrCol: true -- project a row; otherwise, project a column
+case class ProjectOperator(child: LogicalPlan,
+                           nrows: Long,
+                           ncols: Long,
+                           blkSize: Int,
+                           rowOrCol: Boolean,
+                           index: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class TransposeOperator(child: LogicalPlan) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }

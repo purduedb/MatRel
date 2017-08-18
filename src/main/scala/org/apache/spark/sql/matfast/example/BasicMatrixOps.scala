@@ -231,6 +231,7 @@ object BasicMatrixOps {
 
     import spark.MatfastImplicits._
 
+    // select on the product of (mat1 X mat2)
     val mat_select = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).selection(4, 4, 2, 0, 3)
     mat_select.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))

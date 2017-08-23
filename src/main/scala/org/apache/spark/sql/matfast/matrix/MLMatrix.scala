@@ -33,9 +33,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
 import org.apache.spark.sql.types._
 
-/**
-  * Abstract class for a local matrix.
-  */
+
 @SQLUserDefinedType(udt = classOf[MatrixUDT])
 @Since("1.0.0")
 abstract class MLMatrix extends Serializable {

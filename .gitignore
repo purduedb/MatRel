@@ -4,13 +4,3 @@ build/*.jar
 derby.log
 metastore_db/
 target/
-project/project/
-spark-warehouse/
-src/main/java/
-src/main/resources/
-src/main/scala-2.10/
-src/main/scala/org/apache/spark/sql/matfast/expression/
-src/main/scala/org/apache/spark/sql/matfast/matrix/BlockPartitionMatrix.scala
-src/main/scala/org/apache/spark/sql/matfast/matrix/Matrix.scala
-src/main/scala/org/apache/spark/sql/matfast/matrix/MatrixPartitioner.scala
-src/test/

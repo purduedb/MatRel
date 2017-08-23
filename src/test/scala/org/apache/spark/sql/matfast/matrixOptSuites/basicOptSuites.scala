@@ -15,30 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.matfast.partitioner
+package org.apache.spark.sql.matfast.matrixOptSuites
 
-import org.apache.spark.Partitioner
-// scalastyle:off
 
-class IndexPartitioner(partitions: Int) extends Partitioner{
+class basicOptSuites {
 
-  require(partitions >= 0, s"Number of partitions cannot be negative but found $partitions")
-
-  override val numPartitions: Int = partitions
-
-  override def getPartition(key: Any): Int = {
-    key match {
-      case (i: Int) => i
-      case _ => throw new IllegalArgumentException(s"Unrecognized key: $key")
-    }
-  }
-
-  override def equals(other: Any): Boolean = {
-    other.isInstanceOf[IndexPartitioner] &&
-      numPartitions == other.asInstanceOf[IndexPartitioner].numPartitions
-  }
-
-  override def hashCode(): Int = {
-    com.google.common.base.Objects.hashCode(partitions: java.lang.Integer)
-  }
 }

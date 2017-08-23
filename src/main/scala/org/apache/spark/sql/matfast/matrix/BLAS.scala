@@ -1,3 +1,4 @@
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,7 +25,9 @@ import com.github.fommil.netlib.BLAS.{getInstance => NativeBLAS}
 import org.apache.spark.internal.Logging
 import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
 
-// BLAS routines for MLlib's vectors and matrices.
+/**
+ * BLAS routines for MLlib's vectors and matrices.
+ */
 object BLAS extends Serializable with Logging {
 
   @transient private var _f2jBLAS: NetlibBLAS = _

@@ -88,7 +88,7 @@ private[matfast] object MatfastSerializer {
 }
 
 private[matfast] class JavaBigDecimalSerializer extends Serializer[java.math.BigDecimal] {
-  def write(kryo: Kryo, output: Output, bd: java.math.BigDecimal) = {
+  def write(kryo: Kryo, output: Output, bd: java.math.BigDecimal) {
     output.writeString(bd.toString)
   }
 

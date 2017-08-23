@@ -21,7 +21,6 @@ import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 
-
 private[matfast] object MatfastConf {
   private val matfastConfEntries = java.util.Collections.synchronizedMap(
     new java.util.HashMap[String, MatfastConfEntry[_]]())

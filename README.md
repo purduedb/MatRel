@@ -1,7 +1,14 @@
+[![Build Status](https://travis-ci.org/merlintang/SparkDistributedMatrix.svg?branch=branch-2.1)](https://travis-ci.org/merlintang/SparkDistributedMatrix)
+
+# Apache Spark&trade; Distributed Matrix Computation
+
+A library to support distributed matrix computation for machine learning and data analysis  
+
 New branch of MatFast project. 
 The code base moves from Spark-1.5.0 to Spark-2.1.
-We have changed the project name to "MatFast". Furthermore, 
-this project used to be a standalone application on Spark-1.5.0. 
+We have changed the project name to "MatFast". 
+
+
 Now, We are integrating the matrix operations and optimizations 
 inside Spark SQL. We have extended the DataSet API such that 
 all the implemented matrix operators are available to Spark SQL. 

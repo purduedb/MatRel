@@ -30,7 +30,7 @@ class KryoMLMatrixSerializer extends Serializer[MLMatrix]{
     case _ => -1
   }
 
-  override def write(kryo: Kryo, output: Output, matrix: MLMatrix) = {
+   override def write(kryo: Kryo, output: Output, matrix: MLMatrix) {
     output.writeShort(getTypeInt(matrix))
     matrix match {
       case dense: DenseMatrix =>

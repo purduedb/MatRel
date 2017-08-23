@@ -21,7 +21,6 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{QueryExecution => SQLQueryExecution, SparkPlan}
 import org.apache.spark.sql.matfast.MatfastSession
 
-
 class QueryExecution(val matfastSession: MatfastSession, val matfastLogical: LogicalPlan)
   extends SQLQueryExecution(matfastSession, matfastLogical) {
 

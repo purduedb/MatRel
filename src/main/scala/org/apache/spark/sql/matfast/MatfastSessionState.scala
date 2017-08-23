@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.matfast
 
 import org.apache.spark.sql.matfast.execution.MatfastPlanner
@@ -9,14 +26,9 @@ import org.apache.spark.sql.matfast.plans.{MatfastOptimizer}
 
 import scala.collection.immutable
 
-/**
-  * Created by yongyangyu on 2/17/17.
-  */
 
-/**
-  * A class that holds all session-specific state in a given [[SparkSession]] backed by Simba.
-  */
-private[matfast] class MatfastSessionState (matfastSession: MatfastSession) extends SessionState(matfastSession){
+private[matfast] class MatfastSessionState (matfastSession: MatfastSession)
+  extends SessionState(matfastSession) {
   self =>
 
   protected[matfast] lazy val matfastConf = new MatfastConf
@@ -26,7 +38,7 @@ private[matfast] class MatfastSessionState (matfastSession: MatfastSession) exte
   protected[matfast] lazy val matfastOptimizer: MatfastOptimizer = new MatfastOptimizer
 
   /**
-    * Planner that takes into account spatial opt strategies.
+    * Planner that takes into account matrix opt strategies.
     */
   protected[matfast] val matfastPlanner: sparkexecution.SparkPlanner = {
     new MatfastPlanner(matfastSession, conf, experimentalMethods.extraStrategies)

@@ -22,12 +22,13 @@ import org.apache.spark.rdd.{RDD, ShuffledRDD}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.matfast.util.MatfastSerializer
 
+
 /**
-  * Created by yongyangyu on 3/13/17.
-  * To make load-balancing, we adopt block-cyclic distribution strategy.
-  * For further information, please refer to Section 1.6 from "Matrix Computation" (4th edition)
-  * by Gene Golub and Charles Van Loan.
-  */
+ * To make load-balancing, we adopt block-cyclic distribution strategy.
+ * For further information, please refer to Section 1.6 from "Matrix Computation" (4th edition)
+ * by Gene Golub and Charles Van Loan.
+ */
+
 class BlockCyclicPartitioner(val ROW_BLKS: Int,
                              val COL_BLKS: Int,
                              val ROW_BLKS_PER_PARTITION: Int,

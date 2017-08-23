@@ -21,7 +21,7 @@ import org.apache.spark.{Partitioner, SparkConf}
 import org.apache.spark.rdd.{RDD, ShuffledRDD}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.matfast.util.MatfastSerializer
-
+// scalastyle:off
 
 class ColumnPartitioner(partitions: Int) extends Partitioner{
 
@@ -46,6 +46,8 @@ class ColumnPartitioner(partitions: Int) extends Partitioner{
     com.google.common.base.Objects.hashCode(partitions: java.lang.Integer)
   }
 }
+
+// scalastyle:on
 
 object ColumnPartitioner {
 

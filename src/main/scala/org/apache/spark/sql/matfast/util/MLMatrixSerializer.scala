@@ -21,7 +21,6 @@ import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeArra
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.matfast.matrix._
 
-
 object MLMatrixSerializer {
 
   def serialize(obj: MLMatrix): InternalRow = {

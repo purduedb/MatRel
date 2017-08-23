@@ -241,14 +241,19 @@ object MatrixOperators extends Strategy {
           leftColNum, leftRowNum, right, rightRowNum, rightColNum, blkSize))) :: Nil
       case _ => TraceDirectExecution(planLater(child)) :: Nil
     }
+
     case MatrixScalarAddOperator(left, right) =>
       MatrixScalarAddExecution(planLater(left), right) :: Nil
+
     case MatrixScalarMultiplyOperator(left, right) =>
       MatrixScalarMultiplyExecution(planLater(left), right) :: Nil
+
     case MatrixPowerOperator(left, right) =>
       MatrixPowerExecution(planLater(left), right) :: Nil
+
     case VectorizeOperator(child, nrows, ncols, blkSize) =>
       VectorizeExecution(planLater(child), nrows, ncols, blkSize) :: Nil
+
     case MatrixElementAddOperator(left, leftRowNum, leftColNum,
     right, rightRowNum, rightColNum, blkSize) =>
       MatrixElementAddExecution(planLater(left), leftRowNum, leftColNum,
@@ -269,6 +274,7 @@ object MatrixOperators extends Strategy {
     right, rightRowNum, rightColNum, blkSize) =>
       RankOneUpdateExecution(planLater(left), leftRowNum, leftColNum,
         planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+
     case _ => Nil
   }
 }

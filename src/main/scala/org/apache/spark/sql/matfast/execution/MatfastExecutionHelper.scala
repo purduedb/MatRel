@@ -27,6 +27,8 @@ import org.apache.spark.sql.matfast.matrix.{LocalMatrix, MatrixBlock}
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, IndexPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
 
+import scala.collection.concurrent.TrieMap
+
 object MatfastExecutionHelper {
 
   def repartitionWithTargetPartitioner(partitioner: Partitioner,

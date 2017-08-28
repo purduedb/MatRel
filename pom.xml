@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.apache.spark.matfast</groupId>
+    <artifactId>matFast</artifactId>
+    <version>0.1-SNAPSHOT</version>
+
+    <properties>
+        <scala.binary.version>2.11</scala.binary.version>
+        <spark.version>2.1.0</spark.version>
+        <jetty.version>9.2.16.v20160414</jetty.version>
+    </properties>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.scala-tools</groupId>
+                <artifactId>maven-scala-plugin</artifactId>
+                <version>2.15.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                            <goal>testCompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.6</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.19.1</version>
+                <configuration>
+                    <skipTests>true</skipTests>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.scalatest</groupId>
+                <artifactId>scalatest-maven-plugin</artifactId>
+                <version>1.0</version>
+                <!-- Note config is repeated in surefire config -->
+                <configuration>
+                    <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
+                    <junitxml>.</junitxml>
+                    <filereports>SparkTestSuite.txt</filereports>
+                    <argLine>-ea -Xmx3g -XX:MaxPermSize=512m -XX:ReservedCodeCacheSize=128m</argLine>
+                    <stderr/>
+                    <environmentVariables>
+                        <!--
+                          Setting SPARK_DIST_CLASSPATH is a simple way to make sure any child processes
+                          launched by the tests have access to the correct test-time classpath.
+                        -->
+                        <!--<SPARK_DIST_CLASSPATH>${test_classpath}</SPARK_DIST_CLASSPATH>-->
+                        <SPARK_PREPEND_CLASSES>1</SPARK_PREPEND_CLASSES>
+                        <SPARK_SCALA_VERSION>${scala.binary.version}</SPARK_SCALA_VERSION>
+                        <SPARK_TESTING>1</SPARK_TESTING>
+                        <JAVA_HOME>${env.JAVA_HOME}</JAVA_HOME>
+                    </environmentVariables>
+                    <systemProperties>
+                        <log4j.configuration>file:src/test/resources/log4j.properties</log4j.configuration>
+                        <derby.system.durability>test</derby.system.durability>
+                        <java.awt.headless>true</java.awt.headless>
+                        <java.io.tmpdir>${project.build.directory}/tmp</java.io.tmpdir>
+                        <spark.test.home>${project.build.directory}/testHome</spark.test.home>
+                        <spark.testing>1</spark.testing>
+                        <spark.ui.enabled>false</spark.ui.enabled>
+                        <spark.ui.showConsoleProgress>false</spark.ui.showConsoleProgress>
+                        <spark.unsafe.exceptionOnMemoryLeak>true</spark.unsafe.exceptionOnMemoryLeak>
+                    </systemProperties>
+                    <!--<tagsToExclude>${test.exclude.tags}</tagsToExclude>-->
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>test</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+
+    <dependencies>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-mllib_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-mllib-local_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-mllib_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+</project>
+

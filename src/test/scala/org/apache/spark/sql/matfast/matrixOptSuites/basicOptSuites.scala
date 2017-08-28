@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.matfast.matrixOptSuites
 
+import org.apache.spark.SparkFunSuite
 
-class basicOptSuites {
+class basicOptSuites extends SparkFunSuite{
 
 }

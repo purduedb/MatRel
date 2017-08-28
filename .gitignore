@@ -1,4 +1,5 @@
 .DS_Store
+*.iml
 .idea/
 build/*.jar
 derby.log

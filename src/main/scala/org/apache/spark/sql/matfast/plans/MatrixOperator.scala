@@ -31,7 +31,7 @@ case class ProjectOperator(child: LogicalPlan,
   override def output: Seq[Attribute] = child.output
 }
 
-case class SelectOperator(child: LogicalPlan,
+case class SelectCellOperator(child: LogicalPlan,
                           nrows: Long,
                           ncols: Long,
                           blkSize: Int,

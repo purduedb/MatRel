@@ -123,36 +123,36 @@ object MatrixOperators extends Strategy {
             ProjectColumnDirectExecution(planLater(child), blkSize, index) :: Nil
         }
       }
-    case SelectOperator(child, nrows, ncols, blkSize, rowIdx, colIdx) =>
+    case SelectCellOperator(child, nrows, ncols, blkSize, rowIdx, colIdx) =>
       child match {
         case TransposeOperator(ch) =>
           SelectDirectExecution(planLater(ch), blkSize, colIdx, rowIdx) :: Nil
         case MatrixScalarAddOperator(ch, alpha) =>
           MatrixScalarAddExecution(planLater(
-            SelectOperator(ch, nrows, ncols, blkSize, rowIdx, colIdx)), alpha) :: Nil
+            SelectCellOperator(ch, nrows, ncols, blkSize, rowIdx, colIdx)), alpha) :: Nil
         case MatrixScalarMultiplyOperator(ch, alpha) =>
           MatrixScalarMultiplyExecution(planLater(
-            SelectOperator(ch, nrows, ncols, blkSize, rowIdx, colIdx)), alpha) :: Nil
+            SelectCellOperator(ch, nrows, ncols, blkSize, rowIdx, colIdx)), alpha) :: Nil
         case MatrixElementAddOperator(left, leftRowNum, leftColNum,
         right, rightRowNum, rightColNum, blkSize) =>
           MatrixElementAddExecution(planLater(
-            SelectOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
+            SelectCellOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
             leftRowNum, leftColNum, planLater(
-            SelectOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
+            SelectCellOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
             rightRowNum, rightColNum, blkSize) :: Nil
         case MatrixElementMultiplyOperator(left, leftRowNum, leftColNum,
         right, rightRowNum, rightColNum, blkSize) =>
           MatrixElementMultiplyExecution(planLater(
-            SelectOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
+            SelectCellOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
             leftRowNum, leftColNum, planLater(
-            SelectOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
+            SelectCellOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
             rightRowNum, rightColNum, blkSize) :: Nil
         case MatrixElementDivideOperator(left, leftRowNum, leftColNum,
         right, rightRowNum, rightColNum, blkSize) =>
           MatrixElementDivideExecution(planLater(
-            SelectOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
+            SelectCellOperator(left, leftRowNum, leftColNum, blkSize, rowIdx, colIdx)),
             leftRowNum, leftColNum, planLater(
-            SelectOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
+            SelectCellOperator(right, rightRowNum, rightColNum, blkSize, rowIdx, colIdx)),
             rightRowNum, rightColNum, blkSize) :: Nil
         case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
         right, rightRowNum, rightColNum, blkSize) =>

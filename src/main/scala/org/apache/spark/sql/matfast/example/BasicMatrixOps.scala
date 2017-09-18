@@ -34,7 +34,7 @@ object BasicMatrixOps {
     // runMatrixMultiplication(matfastSession)
     // runMatrixAggregation(matfastSession)
     // runMatrixProjection(matfastSession)
-    runMatrixSelectionCell(matfastSession)
+    runMatrixSelection(matfastSession)
     matfastSession.stop()
   }
 
@@ -193,7 +193,7 @@ object BasicMatrixOps {
 
     import spark.MatfastImplicits._
 
-    val mat1_proj_row = mat1.projectRow(4, 4, 2, 2)
+    val mat1_proj_row = mat1.project(4, 4, 2, true, 2)
     mat1_proj_row.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
@@ -201,7 +201,7 @@ object BasicMatrixOps {
       // scalastyle:on
     }
 
-    val mat2_proj_col = mat2.projectColumn(4, 4, 2, 3)
+    val mat2_proj_col = mat2.project(4, 4, 2, false, 3)
     mat2_proj_col.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
@@ -209,7 +209,7 @@ object BasicMatrixOps {
       // scalastyle:on
     }
 
-    val mat2_X_mat2_col = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).projectColumn(4, 4, 2, 3)
+    val mat2_X_mat2_col = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).project(4, 4, 2, false, 3)
     mat2_X_mat2_col.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
@@ -218,7 +218,7 @@ object BasicMatrixOps {
     }
   }
 
-  private def runMatrixSelectionCell(spark: MatfastSession): Unit = {
+  private def runMatrixSelection(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2, 2, Array[Double](1, 1, 2, 2))
     val b2 = new DenseMatrix(2, 2, Array[Double](2, 2, 3, 3))
@@ -232,7 +232,7 @@ object BasicMatrixOps {
     import spark.MatfastImplicits._
 
     // select on the product of (mat1 X mat2)
-    val mat_select = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).projectCell(4, 4, 2, 0, 3)
+    val mat_select = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).selection(4, 4, 2, 0, 3)
     mat_select.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off

@@ -52,7 +52,7 @@ class Dataset[T] private[matfast]
              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     require(rowIdx < nrows, s"row index should be smaller than #rows, rid=$rowIdx, #rows=$nrows")
     require(colIdx < ncols, s"col index should be smaller than #cols, cid=$colIdx, #cols=$ncols")
-    SelectCellOperator(this.logicalPlan, nrows, ncols, blkSize, rowIdx, colIdx)
+    ProjectCellOperator(this.logicalPlan, nrows, ncols, blkSize, rowIdx, colIdx)
   }
 
   def t(): DataFrame = transpose()

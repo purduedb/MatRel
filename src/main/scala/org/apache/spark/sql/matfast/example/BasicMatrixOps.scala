@@ -34,7 +34,7 @@ object BasicMatrixOps {
     // runMatrixMultiplication(matfastSession)
     // runMatrixAggregation(matfastSession)
     // runMatrixProjection(matfastSession)
-    runMatrixSelection(matfastSession)
+    runMatrixProjectCell(matfastSession)
     matfastSession.stop()
   }
 
@@ -218,7 +218,7 @@ object BasicMatrixOps {
     }
   }
 
-  private def runMatrixSelection(spark: MatfastSession): Unit = {
+  private def runMatrixProjectCell(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2, 2, Array[Double](1, 1, 2, 2))
     val b2 = new DenseMatrix(2, 2, Array[Double](2, 2, 3, 3))

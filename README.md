@@ -14,3 +14,10 @@ design decisions can be found in the paper "In-memory distributed matrix
 computation processing and optimization". We'll continue updating 
 the code base to embrace more useful features.
 
+For the dev branch, we are extending various operators on top of 
+matrix data. Specifically, we are supporting relational operators 
+over matrix data, i.e., relational selection, projection, and join 
+operations. We'll update the semantics of these operators and how 
+they inter-operate with existing matrix operators in a separate 
+technique report.
+

@@ -241,6 +241,8 @@ object MatrixOperators extends Strategy {
           leftColNum, leftRowNum, right, rightRowNum, rightColNum, blkSize))) :: Nil
       case _ => TraceDirectExecution(planLater(child)) :: Nil
     }
+    case SelectCellValueOperator(child, v, eps) =>
+      SelectValueExecution(planLater(child), v, eps) :: Nil
     case MatrixScalarAddOperator(left, right) =>
       MatrixScalarAddExecution(planLater(left), right) :: Nil
     case MatrixScalarMultiplyOperator(left, right) =>

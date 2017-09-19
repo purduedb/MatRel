@@ -19,6 +19,8 @@ package org.apache.spark.sql.matfast.execution
 
 import scala.collection.mutable.ArrayBuffer
 
+import util.control.Breaks._
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
@@ -207,6 +209,70 @@ case class SelectDirectExecution(child: SparkPlan,
       res.setInt(0, blk._1._1)
       res.setInt(1, blk._1._2)
       res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class SelectValueExecution(child: SparkPlan,
+                                v: Double,
+                                eps: Double) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrixInternalRow = row.getStruct(2, 7)
+      val matrix = MLMatrixSerializer.deserialize(matrixInternalRow)
+      val filtered = matrix match {
+        case den: DenseMatrix =>
+          val filteredValues = Array.fill[Double](den.values.length)(0.0)
+          for (i <- 0 until den.values.length) {
+            if (Math.abs(v - den.values(i)) <= eps) {
+              filteredValues(i) = den.values(i)
+            }
+          }
+          // Here assume only a small portion of data is selected.
+          // A better solution may vary according to the percentage of nnz.
+          new DenseMatrix(den.numRows, den.numCols, filteredValues, den.isTransposed).toSparse
+        case sp: SparseMatrix =>
+          val filteredValues = ArrayBuffer.empty[Double]
+          val filteredRowIndices = ArrayBuffer.empty[Int]
+          val filteredColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
+          var total = 0
+          for (i <- 0 until sp.values.length) {
+            if (Math.abs(v - sp.values(i)) <= eps) {
+              total += 1
+              filteredValues += v
+              filteredRowIndices += sp.rowIndices(i)
+              for (j <- 1 until filteredColPtrs.length) {
+                breakable {
+                  if (i >= sp.colPtrs(j - 1) && i < sp.colPtrs(j)) {
+                    filteredColPtrs(j) += 1
+                    break
+                  }
+                }
+              }
+            }
+          }
+          filteredColPtrs(sp.colPtrs.length - 1) = total
+          for (k <- 1 until filteredColPtrs.length - 1) {
+            filteredColPtrs(k) += filteredColPtrs(k - 1)
+          }
+          new SparseMatrix(sp.numRows, sp.numCols, filteredColPtrs, filteredRowIndices.toArray,
+            filteredValues.toArray, sp.isTransposed)
+        case _ =>
+          throw new SparkException("Undefined matrix type in SelectValueExecution()")
+      }
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(filtered))
       res
     }
   }

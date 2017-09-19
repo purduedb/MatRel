@@ -34,7 +34,8 @@ object BasicMatrixOps {
     // runMatrixMultiplication(matfastSession)
     // runMatrixAggregation(matfastSession)
     // runMatrixProjection(matfastSession)
-    runMatrixProjectCell(matfastSession)
+    // runMatrixProjectCell(matfastSession)
+    runMatrixSelectValue(matfastSession)
     matfastSession.stop()
   }
 
@@ -234,6 +235,41 @@ object BasicMatrixOps {
     // select on the product of (mat1 X mat2)
     val mat_select = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).projectCell(4, 4, 2, 0, 3)
     mat_select.rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+  }
+
+  private def runMatrixSelectValue(spark: MatfastSession): Unit = {
+    import spark.implicits._
+    val b3 = new DenseMatrix(2, 2, Array[Double](3, 3, 4, 4))
+    val b4 = new DenseMatrix(2, 2, Array[Double](4, 5, 6, 7))
+    val s1 = new SparseMatrix(2, 2, Array[Int](0, 1, 2),
+      Array[Int](1, 0), Array[Double](4, 2))
+    val mat1 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
+    import spark.MatfastImplicits._
+    val mat_select_value = mat1.selectValue(4)
+    mat_select_value.rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+    /*
+     * Test a new sparse matrix below
+     *  --------------
+     *  | 1  0  3  0 |
+     *  | 0  5  0  0 |
+     *  | 6  0  9  0 |
+     *  | 0  8  0  3 |
+     *  -------------
+     */
+    val s2 = new SparseMatrix(4, 4, Array[Int](0, 2, 4, 6, 7),
+      Array[Int](0, 2, 1, 3, 0, 2, 3), Array[Double](1, 6, 5, 8, 3, 9, 3))
+    val mat2 = Seq(MatrixBlock(0, 0, s2)).toDS()
+    mat2.selectValue(3).rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])

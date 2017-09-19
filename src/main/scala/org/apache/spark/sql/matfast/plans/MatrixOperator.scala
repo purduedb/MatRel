@@ -40,6 +40,14 @@ case class ProjectCellOperator(child: LogicalPlan,
   override def output: Seq[Attribute] = child.output
 }
 
+// select value operator returns a matrix of the same dimension as the input
+// leaving unsatisfied entries with 0's.
+case class SelectCellValueOperator(child: LogicalPlan,
+                                   v: Double,
+                                   eps: Double) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class TransposeOperator(child: LogicalPlan) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }

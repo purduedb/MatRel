@@ -82,6 +82,11 @@ class Dataset[T] private[matfast]
     TraceOperator(this.logicalPlan, nrows, ncols)
   }
 
+  def selectValue(v: Double, eps: Double = 1e-6,
+                  data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    SelectCellValueOperator(this.logicalPlan, v, eps)
+  }
+
   def vec(nrows: Long, ncols: Long, blkSize: Int,
           data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     VectorizeOperator(this.logicalPlan, nrows, ncols, blkSize)

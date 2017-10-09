@@ -83,8 +83,14 @@ class Dataset[T] private[matfast]
   }
 
   def selectValue(v: Double, eps: Double = 1e-6,
-                  data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+                  data: Seq[Attribute] =
+                    this.queryExecution.analyzed.output): DataFrame = withPlan {
     SelectCellValueOperator(this.logicalPlan, v, eps)
+  }
+
+  def removeEmptyRows(data: Seq[Attribute] =
+                      this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RemoveEmptyRowsOperator(this.logicalPlan)
   }
 
   def vec(nrows: Long, ncols: Long, blkSize: Int,

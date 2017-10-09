@@ -48,6 +48,14 @@ case class SelectCellValueOperator(child: LogicalPlan,
   override def output: Seq[Attribute] = child.output
 }
 
+case class RemoveEmptyRowsOperator(child: LogicalPlan) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+case class RemoveEmptyColumnsOperator(child: LogicalPlan) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class TransposeOperator(child: LogicalPlan) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }

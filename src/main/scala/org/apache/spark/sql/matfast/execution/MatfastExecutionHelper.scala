@@ -18,12 +18,13 @@
 package org.apache.spark.sql.matfast.execution
 
 import scala.collection.concurrent.TrieMap
+import scala.util.control.Breaks._
 
-import org.apache.spark.Partitioner
+import org.apache.spark.{Partitioner, SparkException}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
-import org.apache.spark.sql.matfast.matrix.{LocalMatrix, MatrixBlock}
+import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, IndexPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
 
@@ -278,6 +279,157 @@ object MatfastExecutionHelper {
       res.setInt(0, row._1)
       res.setInt(1, row._2)
       res.update(2, MLMatrixSerializer.serialize(row._3))
+      res
+    }
+  }
+
+  def findEmptyRows(rdd: RDD[InternalRow]): RDD[(Int, Set[Int])] = {
+    rdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val tuple = matrix match {
+        case den: DenseMatrix =>
+          var rowIndexInclude = scala.collection.mutable.Set[Int]()
+          breakable {
+            for (i <- 0 until den.numRows) {
+              if (!rowIndexInclude.contains(i)) {
+                for (j <- 0 until den.numCols) {
+                  if (den(i, j) != 0.0) {
+                    rowIndexInclude += i
+                    break
+                  }
+                }
+              }
+            }
+          }
+          var rowIndexNotExist = scala.collection.mutable.Set[Int]()
+          for (i <- 0 until den.numRows) {
+            if (!rowIndexInclude.contains(i)) {
+              rowIndexNotExist += i
+            }
+          }
+          rowIndexNotExist
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) { // CSC
+            var rowIndexInclude = scala.collection.mutable.Set[Int]()
+            for (x <- sp.rowIndices) {
+              if (!rowIndexInclude.contains(x)) {
+                rowIndexInclude += x
+              }
+            }
+            var rowIndexNotExist = scala.collection.mutable.Set[Int]()
+            for (i <- 0 until sp.numRows) {
+              if (!rowIndexInclude.contains(i)) {
+                rowIndexNotExist += i
+              }
+            }
+            rowIndexNotExist
+          } else { // CSR
+            var rowIndexNotExist = scala.collection.mutable.Set[Int]()
+            for (i <- 0 until sp.numCols) {
+              if (sp.colPtrs(i + 1) == sp.colPtrs(i)) {
+                rowIndexNotExist += i
+              }
+            }
+            rowIndexNotExist
+          }
+        case _ =>
+          throw new SparkException("Undefined matrix type in ProjectRowDirectExecute()")
+      }
+      (rid, (cid, tuple))
+    }.groupByKey()
+      .map { case (rid, iter) =>
+          val rowMap = scala.collection.mutable.HashMap[Int, Int]()
+          var ncols = 0
+          for (tuple <- iter) {
+            val currSet = tuple._2
+            ncols += 1
+            for (x <- currSet) {
+              if (!rowMap.contains(x)) {
+                rowMap(x) = 1
+              } else {
+                rowMap(x) = rowMap(x) + 1
+              }
+            }
+          }
+          var rowsNotExist = scala.collection.mutable.Set[Int]()
+          for (key <- rowMap.keySet) {
+            if (ncols == rowMap(key)) {
+              rowsNotExist += key
+            }
+          }
+        (rid, rowsNotExist.toSet)
+      }
+  }
+
+  def removeEmptyRows(rdd: RDD[InternalRow],
+                      removedRows: RDD[(Int, Set[Int])]): RDD[InternalRow] = {
+    val matRdd = rdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      (rid, (cid, matrix))
+    }
+    matRdd.join(removedRows).map { case (rid, ((cid, matrix), rowSet)) =>
+    val newMatrix = matrix match {
+        case den: DenseMatrix =>
+          if (rowSet.isEmpty) {
+            den
+          } else {
+            val newLength = den.numCols * (den.numRows - rowSet.size)
+            val newValues = Array.fill(newLength)(0.0)
+            var i = 0
+            for (x <- den.values) {
+              if (x != 0.0) {
+                newValues(i) = x
+                i += 1
+              }
+            }
+            if (!den.isTransposed) {
+              new DenseMatrix(den.numRows - rowSet.size, den.numCols, newValues, den.isTransposed)
+            } else {
+              new DenseMatrix(den.numRows, den.numCols - rowSet.size, newValues, den.isTransposed)
+            }
+          }
+        case sp: SparseMatrix =>
+          if (rowSet.isEmpty) {
+            sp
+          } else {
+            if (!sp.isTransposed) {
+              val rowIdx = sp.rowIndices
+              for (i <- 0 until rowIdx.length) {
+                var smaller = 0
+                for (rmIdx <- rowSet) {
+                  if (rmIdx < rowIdx(i)) {
+                    smaller += 1
+                  }
+                }
+                rowIdx(i) -= smaller
+              }
+              new SparseMatrix(sp.numRows - rowSet.size, sp.numCols,
+                sp.colPtrs, rowIdx, sp.values, sp.isTransposed)
+            } else {
+              val rowIdx = Array.fill(sp.numCols - rowSet.size + 1)(0)
+              var ind = 0
+              for (i <- 0 until sp.colPtrs.length - 1) {
+                if (sp.colPtrs(i + 1) != sp.colPtrs(i)) {
+                  rowIdx(ind) = sp.colPtrs(i)
+                  ind += 1
+                }
+              }
+              rowIdx(rowIdx.length - 1) = sp.colPtrs(sp.colPtrs.length - 1)
+              new SparseMatrix(sp.numCols - rowSet.size, sp.numRows, rowIdx,
+                sp.rowIndices, sp.values, sp.isTransposed)
+            }
+          }
+        case _ =>
+          throw new SparkException("Undefined matrix type in ProjectRowDirectExecute()")
+      }
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(newMatrix.asInstanceOf[MLMatrix]))
       res
     }
   }

@@ -250,7 +250,7 @@ object BasicMatrixOps {
       Array[Int](1, 0), Array[Double](4, 2))
     val mat1 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
     import spark.MatfastImplicits._
-    val mat_select_value = mat1.selectValue(4)
+    val mat_select_value = mat1.selectValue(5)
     mat_select_value.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
@@ -268,8 +268,11 @@ object BasicMatrixOps {
      */
     val s2 = new SparseMatrix(4, 4, Array[Int](0, 2, 4, 6, 7),
       Array[Int](0, 2, 1, 3, 0, 2, 3), Array[Double](1, 6, 5, 8, 3, 9, 3))
+    val s3 = new SparseMatrix(4, 4, Array[Int](0, 2, 3, 5, 7),
+      Array[Int](0, 2, 1, 0, 2, 1, 3), Array[Double](1, 3, 5, 6, 9, 8, 3), true)
     val mat2 = Seq(MatrixBlock(0, 0, s2)).toDS()
-    mat2.selectValue(3).rdd.foreach { row =>
+    val mat3 = Seq(MatrixBlock(0, 0, s3)).toDS()
+    mat3.selectValue(3).removeEmptyRows().rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])

@@ -93,6 +93,11 @@ class Dataset[T] private[matfast]
     RemoveEmptyRowsOperator(this.logicalPlan)
   }
 
+  def removeEmptyColumns(data: Seq[Attribute] =
+                        this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RemoveEmptyColumnsOperator(this.logicalPlan)
+  }
+
   def vec(nrows: Long, ncols: Long, blkSize: Int,
           data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     VectorizeOperator(this.logicalPlan, nrows, ncols, blkSize)

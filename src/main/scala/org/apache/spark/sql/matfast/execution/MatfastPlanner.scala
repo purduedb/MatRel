@@ -271,7 +271,8 @@ object MatrixOperators extends Strategy {
     right, rightRowNum, rightColNum, blkSize) =>
       RankOneUpdateExecution(planLater(left), leftRowNum, leftColNum,
         planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
-    case RemoveEmptyRowsOperator(ch) => RemoveEmptyRowDirectExecution(planLater(ch)) :: Nil
+    case RemoveEmptyRowsOperator(ch) => RemoveEmptyRowsDirectExecution(planLater(ch)) :: Nil
+    case RemoveEmptyColumnsOperator(ch) => RemoveEmptyColumnsDirectExecution(planLater(ch)) :: Nil
     case _ => Nil
   }
 }

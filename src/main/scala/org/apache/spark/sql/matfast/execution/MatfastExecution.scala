@@ -30,7 +30,7 @@ import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.partitioner.BlockCyclicPartitioner
 import org.apache.spark.sql.matfast.util._
 
-case class RemoveEmptyRowDirectExecution(child: SparkPlan) extends MatfastPlan {
+case class RemoveEmptyRowsDirectExecution(child: SparkPlan) extends MatfastPlan {
 
   override def output: Seq[Attribute] = child.output
 
@@ -40,6 +40,19 @@ case class RemoveEmptyRowDirectExecution(child: SparkPlan) extends MatfastPlan {
     val rootRdd = child.execute()
     val removedRowIds = MatfastExecutionHelper.findEmptyRows(rootRdd)
     MatfastExecutionHelper.removeEmptyRows(rootRdd, removedRowIds)
+  }
+}
+
+case class RemoveEmptyColumnsDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val removedColumnIds = MatfastExecutionHelper.findEmptyColumns(rootRdd)
+    MatfastExecutionHelper.removeEmptyColumns(rootRdd, removedColumnIds)
   }
 }
 

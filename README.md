@@ -19,5 +19,5 @@ matrix data. Specifically, we are supporting relational operators
 over matrix data, i.e., relational selection, projection, aggregation, 
 and join operations. We'll update the semantics of these operators and 
 how they inter-operate with existing matrix operators in a separate 
-technique report.
+technical report.
 

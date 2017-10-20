@@ -371,9 +371,10 @@ case class RowSumDirectExecution(child: SparkPlan) extends MatfastPlan {
             new DenseMatrix(sp.numRows, 1, arr)
           } else { // CSR format
             val arr = new Array[Double](sp.numCols)
-            val colIdx = sp.rowIndices
-            for (i <- 0 until colIdx.length) {
-              arr(colIdx(i)) += sp.values(i)
+            for (j <- 0 until sp.numCols) {
+              for (i <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                arr(j) += sp.values(i + sp.colPtrs(j))
+              }
             }
             new DenseMatrix(sp.numCols, 1, arr)
           }
@@ -413,7 +414,7 @@ case class ColumnSumDirectExecution(child: SparkPlan) extends MatfastPlan {
             val values = den.values
             for (i <- 0 until n) {
               for (j <- 0 until den.numRows) {
-                arr(i) += values(i*den.numRows + j)
+                arr(i) += values(i * den.numRows + j)
               }
             }
             new DenseMatrix(1, n, arr)
@@ -429,20 +430,16 @@ case class ColumnSumDirectExecution(child: SparkPlan) extends MatfastPlan {
         case sp: SparseMatrix =>
           if (!sp.isTransposed) { // CSC format
             val arr = new Array[Double](sp.numCols)
-            for (i <- 0 until sp.colPtrs.length - 1) {
-              for (j <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
-                arr(i) += sp.values(i + j)
+            for (j <- 0 until sp.numCols) {
+              for (i <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                arr(i) += sp.values(i + sp.colPtrs(j))
               }
             }
             new DenseMatrix(1, sp.numCols, arr)
           } else { // CSR format
             val arr = new Array[Double](sp.numRows)
-            val colIdx = sp.rowIndices
-            val rowPtrs = sp.colPtrs
-            for (i <- 0 until rowPtrs.length - 1) {
-              for (j <- 0 until rowPtrs(i + 1) - rowPtrs(i)) {
-                arr(i) += sp.values(i + j)
-              }
+            for (i <- 0 until sp.rowIndices.length) {
+              arr(sp.rowIndices(i)) += sp.values(i)
             }
             new DenseMatrix(1, sp.numRows, arr)
           }
@@ -547,6 +544,72 @@ case class TraceDirectExecution(child: SparkPlan) extends MatfastPlan {
     traceRdd.map { blk =>
       val res = new GenericInternalRow(3)
       res.setInt(0, 0)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class RowNnzDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val colVec = matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) { // row count
+            val m = den.numRows
+            val arr = new Array[Double](m)
+            val values = den.values
+            for (i <- 0 until values.length) {
+              if (math.abs(values(i)) > 1e-6) {
+                arr(i % m) += 1
+              }
+            }
+            new DenseMatrix(m, 1, arr)
+          } else { // column sum
+            val n = den.numCols
+            val arr = new Array[Double](n)
+            val values = den.values
+            for (i <- 0 until n) {
+              for (j <- 0 until den.numRows) {
+                if (math.abs(values(i * den.numRows + j)) > 1e-6) {
+                  arr(i) += 1
+                }
+              }
+            }
+            new DenseMatrix(n, 1, arr)
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) { // CSC format
+            val arr = new Array[Double](sp.numRows)
+            for (i <- 0 until sp.rowIndices.length) {
+              arr(sp.rowIndices(i)) += 1
+            }
+            new DenseMatrix(sp.numRows, 1, arr)
+          } else { // CSR format
+            val arr = new Array[Double](sp.numCols)
+            for (i <- 0 until sp.numCols) {
+              arr(i) = sp.colPtrs(i + 1) - sp.colPtrs(i)
+            }
+            new DenseMatrix(sp.numCols, 1, arr)
+          }
+        case _ => throw new SparkException("Undefined matrix type in RowNnzDirectExecute()")
+      }
+      (rid, colVec.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val rid = blk._1
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
       res.setInt(1, 0)
       res.update(2, MLMatrixSerializer.serialize(blk._2))
       res

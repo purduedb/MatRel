@@ -89,6 +89,33 @@ case class TraceOperator(child: LogicalPlan,
   override def output: Seq[Attribute] = child.output
 }
 
+// Computes count() along the row direction, resulting in a column vector
+case class RowNnzOperator(child: LogicalPlan,
+                          nrows: Long,
+                          ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes count() along the column direction, resulting in a column vector
+case class ColumnNnzOperator(child: LogicalPlan,
+                             nrows: Long,
+                             ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes count() in the entire matrix, resulting in a scalar
+case class NnzOperator(child: LogicalPlan,
+                       nrows: Long,
+                       ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes count() in the diagonal direction
+case class DiagNnzOperator(child: LogicalPlan,
+                           nrows: Long,
+                           ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
 case class MatrixScalarAddOperator(child: LogicalPlan, scalar: Double) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }

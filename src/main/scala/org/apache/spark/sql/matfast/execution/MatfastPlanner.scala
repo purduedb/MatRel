@@ -241,6 +241,54 @@ object MatrixOperators extends Strategy {
           leftColNum, leftRowNum, right, rightRowNum, rightColNum, blkSize))) :: Nil
       case _ => TraceDirectExecution(planLater(child)) :: Nil
     }
+    case RowNnzOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(planLater(ColumnNnzOperator(beforeTrans, ncols, nrows))) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        RowNnzOnesExecution(planLater(ch)) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        RowNnzDirectExecution(planLater(ch)) :: Nil
+      case MatrixElementDivideOperator(leftChild, leftRowNum, leftColNum,
+      rightChild, rightRowNum, rightColNum, blkSize) =>
+        RowNnzDirectExecution(planLater(leftChild)) :: Nil
+      case _ => RowNnzDirectExecution(planLater(child)) :: Nil
+    }
+    case ColumnNnzOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(planLater(RowNnzOperator(beforeTrans, ncols, nrows))) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        ColumnNnzOnesExecution(planLater(ch)) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        ColumnNnzDirectExecution(planLater(ch)) :: Nil
+      case MatrixElementDivideOperator(leftChild, leftRowNum, leftColNum,
+      rightChild, rightRowNum, rightColNum, blkSize) =>
+        ColumnNnzDirectExecution(planLater(leftChild)) :: Nil
+      case _ => ColumnNnzDirectExecution(planLater(child)) :: Nil
+    }
+    case NnzOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        NnzDirectExecution(planLater(beforeTrans)) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        NnzOnesExecution(planLater(ch)) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        NnzDirectExecution(planLater(ch)) :: Nil
+      case MatrixElementDivideOperator(leftChild, leftRowNum, leftColNum,
+      rightChild, rightRowNum, rightColNum, blkSize) =>
+        NnzDirectExecution(planLater(leftChild)) :: Nil
+      case _ => NnzDirectExecution(planLater(child)) :: Nil
+    }
+    case DiagNnzOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        DiagNnzDirectExecution(planLater(beforeTrans)) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        DiagNnzOnesExecution(planLater(ch)) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        DiagNnzDirectExecution(planLater(ch)) :: Nil
+      case MatrixElementDivideOperator(leftChild, leftRowNum, leftColNum,
+      rightChild, rightRowNum, rightColNum, blkSize) =>
+        DiagNnzDirectExecution(planLater(leftChild)) :: Nil
+      case _ => DiagNnzDirectExecution(planLater(child)) :: Nil
+    }
     case SelectCellValueOperator(child, v, eps) =>
       SelectValueExecution(planLater(child), v, eps) :: Nil
     case MatrixScalarAddOperator(left, right) =>

@@ -82,6 +82,27 @@ class Dataset[T] private[matfast]
     TraceOperator(this.logicalPlan, nrows, ncols)
   }
 
+  def rowNnz(nrows: Long, ncols: Long,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RowNnzOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def colNnz(nrows: Long, ncols: Long,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    ColumnNnzOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def nnz(nrows: Long, ncols: Long,
+          data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    NnzOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def diagNnz(nrows: Long, ncols: Long,
+              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    require(nrows == ncols, s"Cannot perform diagNnz() on a rectangle matrix")
+    DiagNnzOperator(this.logicalPlan, nrows, ncols)
+  }
+
   def selectValue(v: Double, eps: Double = 1e-6,
                   data: Seq[Attribute] =
                     this.queryExecution.analyzed.output): DataFrame = withPlan {

@@ -617,6 +617,320 @@ case class RowNnzDirectExecution(child: SparkPlan) extends MatfastPlan {
   }
 }
 
+case class RowNnzOnesExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val colVec = matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) {
+            val arr = Array.fill[Double](den.numRows)(den.numCols)
+            new DenseMatrix(den.numRows, 1, arr)
+          } else {
+            val arr = Array.fill[Double](den.numCols)(den.numRows)
+            new DenseMatrix(den.numCols, 1, arr)
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) {
+            val arr = Array.fill[Double](sp.numRows)(sp.numCols)
+            new DenseMatrix(sp.numRows, 1, arr)
+          } else {
+            val arr = Array.fill[Double](sp.numCols)(sp.numRows)
+            new DenseMatrix(sp.numCols, 1, arr)
+          }
+        case _ =>
+          throw new SparkException("Undefined matrix type in RowNnzOnesExecution()")
+      }
+      (rid, colVec.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val rid = blk._1
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class ColumnNnzDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val rowVec = matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) {
+            val n = den.numCols
+            val arr = new Array[Double](n)
+            val values = den.values
+            for (i <- 0 until n) {
+              for (j <- 0 until den.numRows) {
+                if (math.abs(values(i * den.numRows + j)) > 1e-6) {
+                  arr(i) += 1
+                }
+              }
+            }
+            new DenseMatrix(1, n, arr)
+          } else {
+            val m = den.numRows
+            val arr = new Array[Double](m)
+            val values = den.values
+            for (i <- 0 until values.length) {
+              if (math.abs(values(i)) > 1e-6) {
+                arr(i % m) += 1
+              }
+            }
+            new DenseMatrix(1, m, arr)
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) { // CSC format
+            val arr = new Array[Double](sp.numCols)
+            for (j <- 0 until sp.numCols) {
+              arr(j) = sp.colPtrs(j + 1) - sp.colPtrs(j)
+            }
+            new DenseMatrix(1, sp.numCols, arr)
+          } else { // CSR format
+            val arr = new Array[Double](sp.numRows)
+            for (i <- 0 until sp.rowIndices.length) {
+              arr(sp.rowIndices(i)) += 1
+            }
+            new DenseMatrix(1, sp.numRows, arr)
+          }
+        case _ => throw new SparkException("Undefined matrix type in ColumnNnzDirectExecute()")
+      }
+      (cid, rowVec.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val cid = blk._1
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class ColumnNnzOnesExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val rowVec = matrix match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) {
+            val arr = Array.fill[Double](den.numCols)(den.numRows)
+            new DenseMatrix(1, den.numCols, arr)
+          } else {
+            val arr = Array.fill[Double](den.numRows)(den.numCols)
+            new DenseMatrix(1, den.numRows, arr)
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) {
+            val arr = Array.fill[Double](sp.numCols)(sp.numRows)
+            new DenseMatrix(1, sp.numCols, arr)
+          } else {
+            val arr = Array.fill[Double](sp.numRows)(sp.numCols)
+            new DenseMatrix(1, sp.numRows, arr)
+          }
+        case _ =>
+          throw new SparkException("Undefined matrix type in ColumnNnzOnesExecution()")
+      }
+      (cid, rowVec.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val cid = blk._1
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class NnzDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val nnz = matrix match {
+        case den: DenseMatrix =>
+          new DenseMatrix(1, 1, Array[Double](den.values.count(x => math.abs(x) > 1e-6)))
+        case sp: SparseMatrix =>
+          new DenseMatrix(1, 1, Array[Double](sp.values.length))
+        case _ =>
+          throw new SparkException("Undefined matrix type in NnzDirectExecution()")
+      }
+      (0, nnz.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class NnzOnesExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val n = matrix match {
+        case den: DenseMatrix =>
+          new DenseMatrix(1, 1, Array[Double](den.numRows * den.numCols))
+        case sp: SparseMatrix =>
+          new DenseMatrix(1, 1, Array[Double](sp.numRows * sp.numCols))
+        case _ => throw new SparkException("Undefined matrix type in NnzOnesExecution()")
+      }
+      (0, n.asInstanceOf[MLMatrix])
+    }.reduceByKey(LocalMatrix.add(_, _))
+    rdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class DiagNnzDirectExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+    val diagRdd = rdd.filter(tuple => tuple._1._1 == tuple._1._2).map { row =>
+      val localDiag = row._2 match {
+        case den: DenseMatrix =>
+          val rowNum = den.numRows
+          val colNum = den.numCols
+          require(rowNum == colNum, s"block is not squre, row_num=$rowNum, col_num=$colNum")
+          val values = den.values
+          var nnz = 0
+          for (j <- 0 until colNum) {
+            if (math.abs(values(j * colNum + j)) > 1e-6) {
+              nnz += 1
+            }
+          }
+          val diagMat = new DenseMatrix(1, 1, Array[Double](nnz))
+          (0, diagMat.asInstanceOf[MLMatrix])
+        case sp: SparseMatrix =>
+          var nnz = 0
+          val values = sp.values
+          val rowIndices = sp.rowIndices
+          val colPtrs = sp.colPtrs
+          for (j <- 0 until sp.numCols) {
+            for (k <- 0 until colPtrs(j + 1) - colPtrs(j)) {
+              if (j == rowIndices(k + colPtrs(j))) {
+                nnz += 1
+              }
+            }
+          }
+          val diagMat = new DenseMatrix(1, 1, Array[Double](nnz))
+          (0, diagMat.asInstanceOf[MLMatrix])
+        case _ =>
+          throw new SparkException("Undefined matrix type in DiagNnzDirectExecution()")
+      }
+      localDiag
+    }.reduceByKey(LocalMatrix.add(_, _))
+
+    diagRdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
+case class DiagNnzOnesExecution(child: SparkPlan) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rootRdd = child.execute()
+    val rdd = rootRdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+    val diagRdd = rdd.filter(tuple => tuple._1._1 == tuple._1._2).map { row =>
+      val localDiag = row._2 match {
+        case den: DenseMatrix =>
+          require(den.numRows == den.numCols, s"block is not square")
+          val mat = new DenseMatrix(1, 1, Array[Double](den.numRows))
+          (0, mat.asInstanceOf[MLMatrix])
+        case sp: SparseMatrix =>
+          val mat = new DenseMatrix(1, 1, Array[Double](sp.numRows))
+          (0, mat.asInstanceOf[MLMatrix])
+        case _ =>
+          throw new SparkException("Undefined matrix type in DiagNnzOnesExecution()")
+      }
+      localDiag
+    }.reduceByKey(LocalMatrix.add(_, _))
+    diagRdd.map { blk =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, 0)
+      res.setInt(1, 0)
+      res.update(2, MLMatrixSerializer.serialize(blk._2))
+      res
+    }
+  }
+}
+
 case class MatrixScalarAddExecution(child: SparkPlan, alpha: Double) extends MatfastPlan {
 
   override def output: Seq[Attribute] = child.output

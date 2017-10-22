@@ -116,6 +116,39 @@ case class DiagNnzOperator(child: LogicalPlan,
                            ncols: Long) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }
+
+// Computes avg() along the row direction, resulting in a column vector
+case class RowAvgOperator(child: LogicalPlan,
+                          nrows: Long,
+                          ncols: Long,
+                          blkSize: Int) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes avg() along the column direction, resulting in a row vector
+case class ColumnAvgOperator(child: LogicalPlan,
+                             nrows: Long,
+                             ncols: Long,
+                             blkSize: Int) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes avg() in the entire matrix, resulting in a scalar
+case class AvgOperator(child: LogicalPlan,
+                       nrows: Long,
+                       ncols: Long,
+                       blkSize: Int) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes avg() in the diagonal direction
+case class DiagAvgOperator(child: LogicalPlan,
+                           nrows: Long,
+                           ncols: Long,
+                           blkSize: Int) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class MatrixScalarAddOperator(child: LogicalPlan, scalar: Double) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }

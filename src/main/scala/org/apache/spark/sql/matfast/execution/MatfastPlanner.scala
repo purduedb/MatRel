@@ -289,6 +289,18 @@ object MatrixOperators extends Strategy {
         DiagNnzDirectExecution(planLater(leftChild)) :: Nil
       case _ => DiagNnzDirectExecution(planLater(child)) :: Nil
     }
+    case RowAvgOperator(child, nrows, ncols, blkSize) =>
+      MatrixElementDivideExecution(planLater(RowSumOperator(child, nrows, ncols)),
+        nrows, 1, planLater(RowNnzOperator(child, nrows, ncols)), nrows, 1, blkSize) :: Nil
+    case ColumnAvgOperator(child, nrows, ncols, blkSize) =>
+      MatrixElementDivideExecution(planLater(ColumnSumOperator(child, nrows, ncols)),
+        1, ncols, planLater(ColumnNnzOperator(child, nrows, ncols)), 1, ncols, blkSize) :: Nil
+    case AvgOperator(child, nrows, ncols, blkSize) =>
+      MatrixElementDivideExecution(planLater(SumOperator(child, nrows, ncols)), 1, 1,
+        planLater(NnzOperator(child, nrows, ncols)), 1, 1, blkSize) :: Nil
+    case DiagAvgOperator(child, nrows, ncols, blkSize) =>
+      MatrixElementDivideExecution(planLater(TraceOperator(child, nrows, ncols)), 1, 1,
+        planLater(DiagNnzOperator(child, nrows, ncols)), 1, 1, blkSize) :: Nil
     case SelectCellValueOperator(child, v, eps) =>
       SelectValueExecution(planLater(child), v, eps) :: Nil
     case MatrixScalarAddOperator(left, right) =>

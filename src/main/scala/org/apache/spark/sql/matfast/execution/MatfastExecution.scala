@@ -432,7 +432,7 @@ case class ColumnSumDirectExecution(child: SparkPlan) extends MatfastPlan {
             val arr = new Array[Double](sp.numCols)
             for (j <- 0 until sp.numCols) {
               for (i <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
-                arr(i) += sp.values(i + sp.colPtrs(j))
+                arr(j) += sp.values(i + sp.colPtrs(j))
               }
             }
             new DenseMatrix(1, sp.numCols, arr)

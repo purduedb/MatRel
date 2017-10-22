@@ -103,6 +103,26 @@ class Dataset[T] private[matfast]
     DiagNnzOperator(this.logicalPlan, nrows, ncols)
   }
 
+  def rowAvg(nrows: Long, ncols: Long, blkSize: Int,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RowAvgOperator(this.logicalPlan, nrows, ncols, blkSize)
+  }
+
+  def colAvg(nrows: Long, ncols: Long, blkSize: Int,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    ColumnAvgOperator(this.logicalPlan, nrows, ncols, blkSize)
+  }
+
+  def avg(nrows: Long, ncols: Long, blkSize: Int,
+          data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    AvgOperator(this.logicalPlan, nrows, ncols, blkSize)
+  }
+
+  def diagAvg(nrows: Long, ncols: Long, blkSize: Int,
+              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    DiagAvgOperator(this.logicalPlan, nrows, ncols, blkSize)
+  }
+
   def selectValue(v: Double, eps: Double = 1e-6,
                   data: Seq[Attribute] =
                     this.queryExecution.analyzed.output): DataFrame = withPlan {

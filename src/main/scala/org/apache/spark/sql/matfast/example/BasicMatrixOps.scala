@@ -36,7 +36,8 @@ object BasicMatrixOps {
     // runMatrixProjection(matfastSession)
     // runMatrixProjectCell(matfastSession)
     // runMatrixSelectValue(matfastSession)
-    runMatrixCount(matfastSession)
+    // runMatrixCount(matfastSession)
+    runMatrixAvg(matfastSession)
     matfastSession.stop()
   }
 
@@ -300,6 +301,32 @@ object BasicMatrixOps {
     val mat2 = Seq(MatrixBlock(0, 0, s2)).toDS()
     val mat3 = Seq(MatrixBlock(0, 0, s3)).toDS()
     mat3.nnz(4, 4).rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+  }
+
+  private def runMatrixAvg(spark: MatfastSession): Unit = {
+    import spark.implicits._
+    import spark.MatfastImplicits._
+    /*
+     * Test a new sparse matrix below
+     *  --------------
+     *  | 1  0  3  0 |
+     *  | 0  5  0  0 |
+     *  | 6  0  9  0 |
+     *  | 0  8  0  3 |
+     *  -------------
+     */
+    val s2 = new SparseMatrix(4, 4, Array[Int](0, 2, 4, 6, 7),
+      Array[Int](0, 2, 1, 3, 0, 2, 3), Array[Double](1, 6, 5, 8, 3, 9, 3))
+    val s3 = new SparseMatrix(4, 4, Array[Int](0, 2, 3, 5, 7),
+      Array[Int](0, 2, 1, 0, 2, 1, 3), Array[Double](1, 3, 5, 6, 9, 8, 3), true)
+    val mat2 = Seq(MatrixBlock(0, 0, s2)).toDS()
+    val mat3 = Seq(MatrixBlock(0, 0, s3)).toDS()
+    mat2.avg(4, 4, 4).rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])

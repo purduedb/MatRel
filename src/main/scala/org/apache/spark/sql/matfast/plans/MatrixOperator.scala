@@ -149,6 +149,62 @@ case class DiagAvgOperator(child: LogicalPlan,
   override def output: Seq[Attribute] = child.output
 }
 
+// Computes max() in the row direction, resulting in a column vector
+case class RowMaxOperator(child: LogicalPlan,
+                          nrows: Long,
+                          ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes max() in the column direction, resulting in a row vector
+case class ColumnMaxOperator(child: LogicalPlan,
+                             nrows: Long,
+                             ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes max() in the entire matrix
+case class MaxOperator(child: LogicalPlan,
+                       nrows: Long,
+                       ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes max() in the diagonal direction
+case class DiagMaxOperator(child: LogicalPlan,
+                           nrows: Long,
+                           ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes min() in the row direction, resulting in a column vector
+case class RowMinOperator(child: LogicalPlan,
+                          nrows: Long,
+                          ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes min() in the column direction, resulting in a row vector
+case class ColumnMinOperator(child: LogicalPlan,
+                             nrows: Long,
+                             ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes min() in the entire matrix
+case class MinOperator(child: LogicalPlan,
+                       nrows: Long,
+                       ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+// Computes min() in the diagonal direction
+case class DiagMinOperator(child: LogicalPlan,
+                           nrows: Long,
+                           ncols: Long) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
 case class MatrixScalarAddOperator(child: LogicalPlan, scalar: Double) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 }

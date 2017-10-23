@@ -1091,6 +1091,30 @@ object LocalMatrix {
     }
     new DenseMatrix(mat1.numRows, mat1.numCols, arr)
   }
+
+  def max(mat1: MLMatrix, mat2: MLMatrix): MLMatrix = {
+    require(mat1.numRows == mat2.numRows, s"#rows_mat1=${mat1.numRows},#rows_mat2=${mat2.numRows}")
+    require(mat1.numCols == mat2.numCols, s"#cols_mat1=${mat1.numCols},#cols_mat2=${mat2.numCols}")
+    val v1 = mat1.toArray
+    val v2 = mat2.toArray
+    val v = Array.fill[Double](v1.length)(0.0)
+    for (i <- 0 until v1.length) {
+      v(i) = math.max(v1(i), v2(i))
+    }
+    new DenseMatrix(mat1.numRows, mat1.numCols, v)
+  }
+
+  def min(mat1: MLMatrix, mat2: MLMatrix): MLMatrix = {
+    require(mat1.numRows == mat2.numRows, s"#rows_mat1=${mat1.numRows},#rows_mat2=${mat2.numRows}")
+    require(mat1.numCols == mat2.numCols, s"#cols_mat1=${mat1.numCols},#cols_mat2=${mat2.numCols}")
+    val v1 = mat1.toArray
+    val v2 = mat2.toArray
+    val v = Array.fill[Double](v1.length)(0.0)
+    for (i <- 0 until v1.length) {
+      v(i) = math.min(v1(i), v2(i))
+    }
+    new DenseMatrix(mat1.numRows, mat1.numCols, v)
+  }
 }
 
 object TestSparse {

@@ -301,6 +301,114 @@ object MatrixOperators extends Strategy {
     case DiagAvgOperator(child, nrows, ncols, blkSize) =>
       MatrixElementDivideExecution(planLater(TraceOperator(child, nrows, ncols)), 1, 1,
         planLater(DiagNnzOperator(child, nrows, ncols)), 1, 1, blkSize) :: Nil
+    case RowMaxOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(planLater(ColumnMaxOperator(beforeTrans, ncols, nrows))) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(RowMaxOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(RowMaxOperator(ch, nrows, ncols)), alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(RowMinOperator(ch, nrows, ncols)), alpha) :: Nil
+        }
+      case _ => RowMaxDirectExecution(planLater(child)) :: Nil
+    }
+    case ColumnMaxOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(planLater(RowMaxOperator(beforeTrans, ncols, nrows))) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(ColumnMaxOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(ColumnMaxOperator(ch, nrows, ncols)),
+            alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(ColumnMinOperator(ch, nrows, ncols)),
+            alpha) :: Nil
+        }
+      case _ => ColumnMaxDirectExecution(planLater(child)) :: Nil
+    }
+    case MaxOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MaxDirectExecution(planLater(beforeTrans)) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(MaxOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(MaxOperator(ch, nrows, ncols)), alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(MinOperator(ch, nrows, ncols)), alpha) :: Nil
+        }
+      case _ => MaxDirectExecution(planLater(child)) :: Nil
+    }
+    case DiagMaxOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        DiagMaxDirectExecution(planLater(beforeTrans)) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(DiagMaxOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(DiagMaxOperator(ch, nrows, ncols)), alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(DiagMinOperator(ch, nrows, ncols)), alpha) :: Nil
+        }
+      case _ => DiagMaxDirectExecution(planLater(child)) :: Nil
+    }
+    case RowMinOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(planLater(ColumnMinOperator(beforeTrans, ncols, nrows))) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(RowMinOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(RowMinOperator(ch, nrows, ncols)), alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(RowMaxOperator(ch, nrows, ncols)), alpha) :: Nil
+        }
+      case _ => RowMinDirectExecution(planLater(child)) :: Nil
+    }
+    case ColumnMinOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MatrixTransposeExecution(planLater(RowMinOperator(beforeTrans, ncols, nrows))) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(ColumnMinOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(ColumnMinOperator(ch, nrows, ncols)),
+            alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(ColumnMaxOperator(ch, nrows, ncols)),
+            alpha) :: Nil
+        }
+      case _ => ColumnMinDirectExecution(planLater(child)) :: Nil
+    }
+    case MinOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        MinDirectExecution(planLater(beforeTrans)) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(MinOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(MinOperator(ch, nrows, ncols)), alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(MaxOperator(ch, nrows, ncols)), alpha) :: Nil
+        }
+      case _ => MinDirectExecution(planLater(child)) :: Nil
+    }
+    case DiagMinOperator(child, nrows, ncols) => child match {
+      case TransposeOperator(beforeTrans) =>
+        DiagMinDirectExecution(planLater(beforeTrans)) :: Nil
+      case MatrixScalarAddOperator(ch, alpha) =>
+        MatrixScalarAddExecution(planLater(DiagMinOperator(ch, nrows, ncols)), alpha) :: Nil
+      case MatrixScalarMultiplyOperator(ch, alpha) =>
+        if (alpha >= 0) {
+          MatrixScalarMultiplyExecution(planLater(DiagMinOperator(ch, nrows, ncols)), alpha) :: Nil
+        } else {
+          MatrixScalarMultiplyExecution(planLater(DiagMaxOperator(ch, nrows, ncols)), alpha) :: Nil
+        }
+      case _ => DiagMinDirectExecution(planLater(child)) :: Nil
+    }
     case SelectCellValueOperator(child, v, eps) =>
       SelectValueExecution(planLater(child), v, eps) :: Nil
     case MatrixScalarAddOperator(left, right) =>

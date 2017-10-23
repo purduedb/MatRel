@@ -123,6 +123,41 @@ class Dataset[T] private[matfast]
     DiagAvgOperator(this.logicalPlan, nrows, ncols, blkSize)
   }
 
+  def rowMax(nrows: Long, ncols: Long,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RowMaxOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def colMax(nrows: Long, ncols: Long,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    ColumnMaxOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def max(nrows: Long, ncols: Long,
+          data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    MaxOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def diagMax(nrows: Long, ncols: Long,
+              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    DiagMaxOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def rowMin(nrows: Long, ncols: Long,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    RowMinOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def colMin(nrows: Long, ncols: Long,
+             data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    ColumnMinOperator(this.logicalPlan, nrows, ncols)
+  }
+
+  def diagMin(nrows: Long, ncols: Long,
+              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    DiagMinOperator(this.logicalPlan, nrows, ncols)
+  }
+
   def selectValue(v: Double, eps: Double = 1e-6,
                   data: Seq[Attribute] =
                     this.queryExecution.analyzed.output): DataFrame = withPlan {

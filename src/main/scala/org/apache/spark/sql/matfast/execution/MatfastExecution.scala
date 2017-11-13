@@ -1659,36 +1659,36 @@ case class JoinTwoIndicesExecution(left: SparkPlan,
   override def children: Seq[SparkPlan] = Seq(left, right)
 
   protected override def doExecute(): RDD[InternalRow] = {
-    val rdd1 = left.execute().map { row =>
+    var rdd1 = left.execute().map { row =>
       val rid = row.getInt(0)
       val cid = row.getInt(1)
       val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
       ((rid, cid), matrix)
     }
-    val rdd2 = right.execute().map { row =>
+    var rdd2 = right.execute().map { row =>
       val rid = row.getInt(0)
       val cid = row.getInt(1)
       val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
       ((rid, cid), matrix)
     }
-    val p1 = rdd1.partitioner.get
-    val p2 = rdd2.partitioner.get
+    val p1 = rdd1.partitioner.getOrElse(null)
+    val p2 = rdd2.partitioner.getOrElse(null)
     if (p1 == null && p2 == null) { // if no partitioner is applied, just use RowPartitioner
       val p = new RowPartitioner(32)
-      rdd1.partitionBy(p)
-      rdd2.partitionBy(p)
+      rdd1 = rdd1.partitionBy(p)
+      rdd2 = rdd2.partitionBy(p)
     } else {
       if (leftRowNum * leftColNum <= rightRowNum * rightColNum) { // left-hand side is smaller
         if (p2 != null) {
-          rdd1.partitionBy(p2)
+          rdd1 = rdd1.partitionBy(p2)
         } else {
-          rdd2.partitionBy(p1)
+          rdd2 = rdd2.partitionBy(p1)
         }
       } else {
         if (p1 != null) {
-          rdd2.partitionBy(p1)
+          rdd2 = rdd2.partitionBy(p1)
         } else {
-          rdd1.partitionBy(p2)
+          rdd1 = rdd1.partitionBy(p2)
         }
       }
     }

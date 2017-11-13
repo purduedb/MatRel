@@ -38,7 +38,8 @@ object BasicMatrixOps {
     // runMatrixSelectValue(matfastSession)
     // runMatrixCount(matfastSession)
     // runMatrixAvg(matfastSession)
-    runMatrixMaxMin(matfastSession)
+    // runMatrixMaxMin(matfastSession)
+    runMatrixJoin(matfastSession)
     matfastSession.stop()
   }
 
@@ -356,6 +357,27 @@ object BasicMatrixOps {
     val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
     val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
     mat2.colMax(4, 4).rdd.foreach { row =>
+      val idx = (row.getInt(0), row.getInt(1))
+      // scalastyle:off
+      println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
+      // scalastyle:on
+    }
+  }
+
+  private def runMatrixJoin(spark: MatfastSession): Unit = {
+    import spark.implicits._
+    import spark.MatfastImplicits._
+
+    val b1 = new DenseMatrix(2, 2, Array[Double](1, 1, 2, 2))
+    val b2 = new DenseMatrix(2, 2, Array[Double](2, 2, 3, 3))
+    val b3 = new DenseMatrix(2, 2, Array[Double](3, 3, 4, 4))
+    val b4 = new DenseMatrix(2, 2, Array[Double](4, 5, 6, 7))
+    val s1 = new SparseMatrix(2, 2, Array[Int](0, 1, 2),
+      Array[Int](1, 0), Array[Double](4, 2))
+    val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
+    val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
+    mat1.joinTwoIndices(4, 4, mat2, 4, 4,
+      (a: Double, b: Double) => (a + b) / 2, 2).rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])

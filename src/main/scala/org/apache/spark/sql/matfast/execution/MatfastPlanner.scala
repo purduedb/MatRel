@@ -441,6 +441,10 @@ object MatrixOperators extends Strategy {
         planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
     case RemoveEmptyRowsOperator(ch) => RemoveEmptyRowsDirectExecution(planLater(ch)) :: Nil
     case RemoveEmptyColumnsOperator(ch) => RemoveEmptyColumnsDirectExecution(planLater(ch)) :: Nil
+    case JoinTwoIndicesOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, mergeFunc, blkSize) =>
+      JoinTwoIndicesExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, mergeFunc, blkSize) :: Nil
     case _ => Nil
   }
 }

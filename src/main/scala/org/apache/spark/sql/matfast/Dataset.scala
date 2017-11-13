@@ -244,6 +244,23 @@ class Dataset[T] private[matfast]
       right.logicalPlan, rightRowNum, rightColNum, blkSize)
   }
 
+  // A joinTwoIndices() operator on two matrices, A and B, where
+  // A is an m-by-n matrix, and B is a p-by-q matrix returns a matrix,
+  // whose dimension is min(m, p)-by-min(n, q), and cell value is defined
+  // by the merge function. If any input cell is empty, the merge function
+  // should return an empty value for the cell.
+  // By default, the empty value should be represented by 0.
+  def joinTwoIndices(leftRowNum: Long, leftColNum: Long,
+                     right: Dataset[_],
+                     rightRowNum: Long, rightColNum: Long,
+                     mergeFunc: (Double, Double) => Double,
+                     blkSize: Int,
+                     data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    JoinTwoIndicesOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize)
+  }
+
   private def getAttributes(keys: Array[String],
                             attrs: Seq[Attribute] =
                             this.queryExecution.analyzed.output): Array[Attribute] = {

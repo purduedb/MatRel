@@ -295,3 +295,21 @@ case class RankOneUpdateOperator(leftChild: LogicalPlan,
 
   override def right: LogicalPlan = rightChild
 }
+
+// this class implements join operator on two matrices, block size must be the same
+// for the 2 matrices, especially, this join focuses on join on the two indices
+case class JoinTwoIndicesOperator(leftChild: LogicalPlan,
+                                  leftRowNum: Long,
+                                  leftColNum: Long,
+                                  rightChild: LogicalPlan,
+                                  rightRowNum: Long,
+                                  rightColNum: Long,
+                                  mergeFunc: (Double, Double) => Double,
+                                  blkSize: Int) extends BinaryNode {
+
+  override def output: Seq[Attribute] = leftChild.output
+
+  override def left: LogicalPlan = leftChild
+
+  override def right: LogicalPlan = rightChild
+}

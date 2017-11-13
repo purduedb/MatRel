@@ -18,17 +18,17 @@
 package org.apache.spark.sql.matfast.execution
 
 import scala.collection.mutable.ArrayBuffer
-
 import util.control.Breaks._
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.matfast.matrix._
-import org.apache.spark.sql.matfast.partitioner.BlockCyclicPartitioner
+import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util._
+
+import scala.collection.concurrent.TrieMap
 
 case class RemoveEmptyRowsDirectExecution(child: SparkPlan) extends MatfastPlan {
 
@@ -1642,5 +1642,83 @@ case class RankOneUpdateExecution(left: SparkPlan,
       s"A.nrows = $leftRowNum, " +
     s"A.ncols = ${leftColNum}, B.nrows = $rightRowNum, B.ncols = $rightColNum")
     MatfastExecutionHelper.matrixRankOneUpdate(left.execute(), right.execute())
+  }
+}
+
+case class JoinTwoIndicesExecution(left: SparkPlan,
+                                   leftRowNum: Long,
+                                   leftColNum: Long,
+                                   right: SparkPlan,
+                                   rightRowNum: Long,
+                                   rightColNum: Long,
+                                   mergeFunc: (Double, Double) => Double,
+                                   blkSize: Int) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = left.output
+
+  override def children: Seq[SparkPlan] = Seq(left, right)
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd1 = left.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+    val rdd2 = right.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+    val p1 = rdd1.partitioner.get
+    val p2 = rdd2.partitioner.get
+    if (p1 == null && p2 == null) { // if no partitioner is applied, just use RowPartitioner
+      val p = new RowPartitioner(32)
+      rdd1.partitionBy(p)
+      rdd2.partitionBy(p)
+    } else {
+      if (leftRowNum * leftColNum <= rightRowNum * rightColNum) { // left-hand side is smaller
+        if (p2 != null) {
+          rdd1.partitionBy(p2)
+        } else {
+          rdd2.partitionBy(p1)
+        }
+      } else {
+        if (p1 != null) {
+          rdd2.partitionBy(p1)
+        } else {
+          rdd1.partitionBy(p2)
+        }
+      }
+    }
+    val rdd = rdd1.zipPartitions(rdd2, preservesPartitioning = true) {
+      case (iter1, iter2) =>
+        val key2val = new TrieMap[(Int, Int), MLMatrix]()
+        val res = new TrieMap[(Int, Int), MLMatrix]()
+        for (elem <- iter1) {
+          val key = elem._1
+          if (!key2val.contains(key)) key2val.putIfAbsent(key, elem._2)
+        }
+
+        for (elem <- iter2) {
+          val key = elem._1
+          if (key2val.contains(key)) {
+            val tmp = key2val.get(key).get
+            res.putIfAbsent(key, LocalMatrix.compute(tmp, elem._2, mergeFunc))
+          }
+        }
+        res.iterator
+    }
+    rdd.map { elem =>
+      val rid = elem._1._1
+      val cid = elem._1._2
+      val matrix = elem._2
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(matrix))
+      res
+    }
   }
 }

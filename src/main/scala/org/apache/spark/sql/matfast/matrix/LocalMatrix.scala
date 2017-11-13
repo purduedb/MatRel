@@ -31,6 +31,25 @@ import scala.collection.mutable.ArrayBuffer
   */
 
 object LocalMatrix {
+  def compute(a: MLMatrix, b: MLMatrix, f: (Double, Double) => Double): MLMatrix = {
+    if (a != null && b != null) {
+      require(a.numRows == b.numRows,
+        s"Matrix A and B must have the same number of rows. But found " +
+          s"A.numRows = ${a.numRows}, B.numRows = ${b.numRows}")
+      require(a.numCols == b.numCols,
+        s"Matrix A and B must have the same number of cols. But found " +
+          s"A.numCols = ${a.numCols}, B.numCols = ${b.numCols}")
+      (a, b) match {
+        case (ma: DenseMatrix, mb: DenseMatrix) => computeDense(ma, mb, f)
+        case (ma: DenseMatrix, mb: SparseMatrix) => computeDenseSparse(ma, mb, f)
+        case (ma: SparseMatrix, mb: DenseMatrix) => computeDenseSparse(mb, ma, f)
+        case (ma: SparseMatrix, mb: SparseMatrix) => computeSparseSparse(ma, mb, f)
+      }
+    } else { // return a null value for the invalid case
+      null
+    }
+  }
+
   def add(a: MLMatrix, b: MLMatrix): MLMatrix = {
     if (a != null && b != null) {
       require(a.numRows == b.numRows,
@@ -53,11 +72,31 @@ object LocalMatrix {
     }
   }
 
-  def addDense(ma: DenseMatrix, mb: DenseMatrix): MLMatrix = {
+  private def computeDense(ma: DenseMatrix, mb: DenseMatrix,
+                           f: (Double, Double) => Double): MLMatrix = {
+    val (arr1, arr2) = (ma.toArray, mb.toArray)
+    val arr = Array.fill(arr1.length)(0.0)
+    for (i <- 0 until arr.length) {
+      arr(i) = f(arr1(i), arr2(i))
+    }
+    new DenseMatrix(ma.numRows, ma.numCols, arr)
+  }
+
+  private def addDense(ma: DenseMatrix, mb: DenseMatrix): MLMatrix = {
     val (arr1, arr2) = (ma.toArray, mb.toArray)
     val arr = Array.fill(arr1.length)(0.0)
     for (i <- 0 until arr.length) {
       arr(i) = arr1(i) + arr2(i)
+    }
+    new DenseMatrix(ma.numRows, ma.numCols, arr)
+  }
+
+  private def computeDenseSparse(ma: DenseMatrix, mb: SparseMatrix,
+                                 f: (Double, Double) => Double): MLMatrix = {
+    val (arr1, arr2) = (ma.toArray, mb.toArray)
+    val arr = Array.fill(arr1.length)(0.0)
+    for (i <- 0 until arr.length) {
+      arr(i) = f(arr1(i), arr2(i))
     }
     new DenseMatrix(ma.numRows, ma.numCols, arr)
   }
@@ -69,6 +108,25 @@ object LocalMatrix {
       arr(i) = arr1(i) + arr2(i)
     }
     new DenseMatrix(ma.numRows, ma.numCols, arr)
+  }
+
+  // This is NOT the optimal implementation for sparse computation on user-defined functions.
+  private def computeSparseSparse(ma: SparseMatrix, mb: SparseMatrix,
+                                  f: (Double, Double) => Double): MLMatrix = {
+    val (arr1, arr2) = (ma.toArray, mb.toArray)
+    val arr = Array.fill(arr1.length)(0.0)
+    var nnz = 0
+    for (i <- 0 until arr.length) {
+      arr(i) = f(arr1(i), arr2(i))
+      if (arr(i) != 0) nnz += 1
+    }
+    val c = new DenseMatrix(ma.numRows, ma.numCols, arr)
+    if (c.numRows * c.numCols > nnz * 2 + c.numCols + 1) {
+      c.toSparse
+    }
+    else {
+      c
+    }
   }
 
   private def addSparseSparse(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
@@ -95,7 +153,7 @@ object LocalMatrix {
 
   // add two sparse matrices in CSC format together
   // without converting them into dense matrix format
-  def addSparseSparseNative(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
+  private def addSparseSparseNative(ma: SparseMatrix, mb: SparseMatrix): MLMatrix = {
     require(ma.numRows == mb.numRows, s"Matrix A.numRows must be equal to B.numRows, but found " +
       s"A.numRows = ${ma.numRows}, B.numRows = ${mb.numRows}")
     require(ma.numCols == mb.numCols, s"Matrix A.numCols must be equal to B.numCols, but found " +

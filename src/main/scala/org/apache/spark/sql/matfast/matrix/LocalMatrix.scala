@@ -39,7 +39,7 @@ object LocalMatrix {
       require(a.numCols == b.numCols,
         s"Matrix A and B must have the same number of cols. But found " +
           s"A.numCols = ${a.numCols}, B.numCols = ${b.numCols}")
-      (a, b) match {
+      (a, b) match { // Notice, the size of a and b may be different!!!
         case (ma: DenseMatrix, mb: DenseMatrix) => computeDense(ma, mb, f)
         case (ma: DenseMatrix, mb: SparseMatrix) => computeDenseSparse(ma, mb, f)
         case (ma: SparseMatrix, mb: DenseMatrix) => computeDenseSparse(mb, ma, f)
@@ -75,7 +75,7 @@ object LocalMatrix {
   private def computeDense(ma: DenseMatrix, mb: DenseMatrix,
                            f: (Double, Double) => Double): MLMatrix = {
     val (arr1, arr2) = (ma.toArray, mb.toArray)
-    val arr = Array.fill(arr1.length)(0.0)
+    val arr = Array.fill(math.min(arr1.length, arr2.length))(0.0)
     for (i <- 0 until arr.length) {
       arr(i) = f(arr1(i), arr2(i))
     }
@@ -94,7 +94,7 @@ object LocalMatrix {
   private def computeDenseSparse(ma: DenseMatrix, mb: SparseMatrix,
                                  f: (Double, Double) => Double): MLMatrix = {
     val (arr1, arr2) = (ma.toArray, mb.toArray)
-    val arr = Array.fill(arr1.length)(0.0)
+    val arr = Array.fill(math.min(arr1.length, arr2.length))(0.0)
     for (i <- 0 until arr.length) {
       arr(i) = f(arr1(i), arr2(i))
     }
@@ -114,7 +114,7 @@ object LocalMatrix {
   private def computeSparseSparse(ma: SparseMatrix, mb: SparseMatrix,
                                   f: (Double, Double) => Double): MLMatrix = {
     val (arr1, arr2) = (ma.toArray, mb.toArray)
-    val arr = Array.fill(arr1.length)(0.0)
+    val arr = Array.fill(math.min(arr1.length, arr2.length))(0.0)
     var nnz = 0
     for (i <- 0 until arr.length) {
       arr(i) = f(arr1(i), arr2(i))

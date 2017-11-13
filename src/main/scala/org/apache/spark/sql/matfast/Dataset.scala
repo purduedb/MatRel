@@ -257,6 +257,10 @@ class Dataset[T] private[matfast]
                      blkSize: Int,
                      data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
   = withPlan {
+    require(leftColNum > blkSize && leftRowNum > blkSize,
+      s"left matrix size is smaller than blkSize")
+    require(rightRowNum > blkSize && rightColNum > blkSize,
+      s"right matrix size is smaller than blkSize")
     JoinTwoIndicesOperator(this.logicalPlan, leftRowNum, leftColNum,
       right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize)
   }

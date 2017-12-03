@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.matfast.plans
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, PrettyAttribute}
 import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LogicalPlan, UnaryNode}
 
 // Project a row or column from a given matrix
@@ -308,6 +308,23 @@ case class JoinTwoIndicesOperator(leftChild: LogicalPlan,
                                   blkSize: Int) extends BinaryNode {
 
   override def output: Seq[Attribute] = leftChild.output
+
+  override def left: LogicalPlan = leftChild
+
+  override def right: LogicalPlan = rightChild
+}
+
+case class CrossProductOperator(leftChild: LogicalPlan,
+                                 leftRowNum: Long,
+                                 leftColNum: Long,
+                                 rightChild: LogicalPlan,
+                                 rightRowNum: Long,
+                                 rightColNum: Long,
+                                 mergeFunc: (Double, Double) => Double,
+                                 blkSize: Int) extends BinaryNode {
+
+  def dim: Seq[Attribute] = List.fill(2)(new PrettyAttribute("dim"))
+  override def output: Seq[Attribute] = dim ++ leftChild.output
 
   override def left: LogicalPlan = leftChild
 

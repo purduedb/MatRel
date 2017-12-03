@@ -21,7 +21,7 @@ import scala.collection.mutable.ArrayBuffer
 import util.control.Breaks._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkException
-import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow, PrettyAttribute}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.matfast.matrix._
@@ -1718,6 +1718,68 @@ case class JoinTwoIndicesExecution(left: SparkPlan,
       res.setInt(0, rid)
       res.setInt(1, cid)
       res.update(2, MLMatrixSerializer.serialize(matrix))
+      res
+    }
+  }
+}
+
+case class CrossProductExecution(left: SparkPlan,
+                                 leftRowNum: Long,
+                                 leftColNum: Long,
+                                 right: SparkPlan,
+                                 rightRowNum: Long,
+                                 rightColNum: Long,
+                                 mergeFunc: (Double, Double) => Double,
+                                 blkSize: Int) extends MatfastPlan {
+
+  def dim: Seq[Attribute] = List.fill(2)(new PrettyAttribute("dim"))
+  override def output: Seq[Attribute] = dim ++ left.output
+
+  override def children: Seq[SparkPlan] = Seq(left, right)
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd1 = left.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+    val rdd2 = right.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+    val crossProduct = rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
+      // (d1, d2, b3, b4) is different than the original blk ids
+      // here (d1, d2) are the first two indices of the 4d blk
+      // while (b3, b4) are the blk ids
+        val offsetD1: Long = rid1 * blkSize
+        val offsetD2: Long = rid2 * blkSize
+        val joinEachFromMat1ToMat2 = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+        for (i <- 0 until mat1.numRows) {
+          for (j <- 0 until mat1.numCols) {
+            val offsetRid = offsetD1 + i
+            val offsetCid = offsetD2 + j
+            val slice = ((offsetRid, offsetCid, rid2, cid2),
+              LocalMatrix.UDF_Element_Matrix(mat1(i, j), mat2, mergeFunc))
+            joinEachFromMat1ToMat2 += slice
+          }
+        }
+        joinEachFromMat1ToMat2.iterator
+    }
+    crossProduct.map { elem =>
+      val d1 = elem._1._1
+      val d2 = elem._1._2
+      val b3 = elem._1._3
+      val b4 = elem._1._4
+      val matrix = elem._2
+      val res = new GenericInternalRow(5)
+      res.setLong(0, d1)
+      res.setLong(1, d2)
+      res.setInt(2, b3)
+      res.setInt(3, b4)
+      res.update(4, MLMatrixSerializer.serialize(matrix))
       res
     }
   }

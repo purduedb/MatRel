@@ -265,6 +265,17 @@ class Dataset[T] private[matfast]
       right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize)
   }
 
+  def crossProduct(leftRowNum: Long, leftColNum: Long,
+                   right: Dataset[_],
+                   rightRowNum: Long, rightColNum: Long,
+                   mergeFunc: (Double, Double) => Double,
+                   blkSize: Int,
+                   data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    CrossProductOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize)
+  }
+
   private def getAttributes(keys: Array[String],
                             attrs: Seq[Attribute] =
                             this.queryExecution.analyzed.output): Array[Attribute] = {

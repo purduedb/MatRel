@@ -39,8 +39,8 @@ object BasicMatrixOps {
     // runMatrixCount(matfastSession)
     // runMatrixAvg(matfastSession)
     // runMatrixMaxMin(matfastSession)
-    runMatrixJoin(matfastSession)
-    // runMatrixCrossProduct(matfastSession)
+    // runMatrixJoin(matfastSession)
+    runMatrixCrossProduct(matfastSession)
     matfastSession.stop()
   }
 

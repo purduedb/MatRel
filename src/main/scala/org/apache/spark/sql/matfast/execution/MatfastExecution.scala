@@ -21,12 +21,13 @@ import scala.collection.mutable.ArrayBuffer
 import util.control.Breaks._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkException
-import org.apache.spark.sql.catalyst.expressions.{Attribute, GenericInternalRow, PrettyAttribute}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, GenericInternalRow, ExprId}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util._
+import org.apache.spark.sql.types.LongType
 
 import scala.collection.concurrent.TrieMap
 
@@ -1732,8 +1733,10 @@ case class CrossProductExecution(left: SparkPlan,
                                  mergeFunc: (Double, Double) => Double,
                                  blkSize: Int) extends MatfastPlan {
 
-  def dim: Seq[Attribute] = List.fill(2)(new PrettyAttribute("dim"))
-  override def output: Seq[Attribute] = dim ++ left.output
+  lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  override def output: Seq[Attribute] = dim ++ right.output
 
   override def children: Seq[SparkPlan] = Seq(left, right)
 
@@ -1755,7 +1758,7 @@ case class CrossProductExecution(left: SparkPlan,
       // here (d1, d2) are the first two indices of the 4d blk
       // while (b3, b4) are the blk ids
         val offsetD1: Long = rid1 * blkSize
-        val offsetD2: Long = rid2 * blkSize
+        val offsetD2: Long = cid1 * blkSize
         val joinEachFromMat1ToMat2 = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
         for (i <- 0 until mat1.numRows) {
           for (j <- 0 until mat1.numCols) {

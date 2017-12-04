@@ -445,6 +445,10 @@ object MatrixOperators extends Strategy {
     right, rightRowNum, rightColNum, mergeFunc, blkSize) =>
       JoinTwoIndicesExecution(planLater(left), leftRowNum, leftColNum,
         planLater(right), rightRowNum, rightColNum, mergeFunc, blkSize) :: Nil
+    case CrossProductOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, mergeFunc, blkSize) =>
+      CrossProductExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, mergeFunc, blkSize) :: Nil
     case _ => Nil
   }
 }

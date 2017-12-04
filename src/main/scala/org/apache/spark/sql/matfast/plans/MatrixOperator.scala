@@ -17,8 +17,9 @@
 
 package org.apache.spark.sql.matfast.plans
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, PrettyAttribute}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, ExprId}
 import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LogicalPlan, UnaryNode}
+import org.apache.spark.sql.types.LongType
 
 // Project a row or column from a given matrix
 // rowOrCol: true -- project a row; otherwise, project a column
@@ -323,8 +324,10 @@ case class CrossProductOperator(leftChild: LogicalPlan,
                                  mergeFunc: (Double, Double) => Double,
                                  blkSize: Int) extends BinaryNode {
 
-  def dim: Seq[Attribute] = List.fill(2)(new PrettyAttribute("dim"))
-  override def output: Seq[Attribute] = dim ++ leftChild.output
+  lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  override def output: Seq[Attribute] = dim ++ rightChild.output
 
   override def left: LogicalPlan = leftChild
 

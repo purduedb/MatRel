@@ -1188,6 +1188,28 @@ object LocalMatrix {
       new DenseMatrix(mat.numRows, mat.numCols, v).toSparse
     }
   }
+
+  def UDF_Element_Match(target: Double, mat: MLMatrix,
+                        udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
+
+    val arr = mat.toArray
+    val v = Array.fill[Double](arr.length)(0.0)
+    var nnz = 0
+    for (i <- 0 until v.length) {
+      if (math.abs(target - arr(i)) < 1e-6) {
+        v(i) = udf(target, arr(i))
+      }
+      if (v(i) != 0) nnz += 1
+    }
+
+    if (nnz == 0) {
+      (false, null)
+    } else if (nnz > 0.5 * mat.numRows * mat.numCols) {
+      (true, new DenseMatrix(mat.numRows, mat.numCols, v))
+    } else {
+      (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
+    }
+  }
 }
 
 object TestSparse {

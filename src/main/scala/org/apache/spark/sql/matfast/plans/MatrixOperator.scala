@@ -327,6 +327,29 @@ case class CrossProductOperator(leftChild: LogicalPlan,
   lazy val dim: Seq[Attribute] =
     Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
       AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+
+  override def output: Seq[Attribute] = dim ++ rightChild.output
+
+  override def left: LogicalPlan = leftChild
+
+  override def right: LogicalPlan = rightChild
+}
+
+// Without index on values, this join on values operator acts similar to
+// cross product to check each pair of blocks from A and B.
+case class JoinOnValuesOperator(leftChild: LogicalPlan,
+                                leftRowNum: Long,
+                                leftColNum: Long,
+                                rightChild: LogicalPlan,
+                                rightRowNum: Long,
+                                rightColNum: Long,
+                                mergeFunc: (Double, Double) => Double,
+                                blkSize: Int) extends BinaryNode {
+
+  lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+
   override def output: Seq[Attribute] = dim ++ rightChild.output
 
   override def left: LogicalPlan = leftChild

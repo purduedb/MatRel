@@ -1210,6 +1210,67 @@ object LocalMatrix {
       (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
     }
   }
+
+  def UDF_Element_Match_Index(ind: Long, cell: Double, mat: MLMatrix,
+                              udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
+    val arr = mat.toArray
+    val v = Array.fill[Double](arr.length)(0.0)
+    var nnz = 0
+    for (i <- 0 until v.length) {
+      if (math.abs(ind - arr(i)) < 1e-6) {
+        v(i) = udf(cell, arr(i))
+      }
+      if (v(i) != 0) nnz += 1
+    }
+
+    if (nnz == 0) {
+      (false, null)
+    } else if (nnz > 0.5 * mat.numRows * mat.numCols) {
+      (true, new DenseMatrix(mat.numRows, mat.numCols, v))
+    } else {
+      (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
+    }
+  }
+
+  def UDF_Value_Match_Index1(target: Double, rid: Int, mat: MLMatrix, blkSize: Int,
+                             udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
+    val offsetD1: Long = rid * blkSize
+    // At most one row of B is matched with the target
+    if (target < offsetD1 + 1 || target > offsetD1 + mat.numRows) {
+      (false, null)
+    } else {
+      val arr = mat.toArray
+      val v = Array.fill[Double](arr.length)(0.0)
+      for (i <- 0 until mat.numRows) {
+        for (j <- 0 until mat.numCols) {
+          if (math.abs(target - offsetD1 - i - 1) < 1e-6) {
+            v(j * mat.numRows + i) = udf(target, mat(i, j))
+          }
+        }
+      }
+      (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
+    }
+  }
+
+  def UDF_Value_Match_Index2(target: Double, cid: Int, mat: MLMatrix, blkSize: Int,
+                             udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
+    val offsetD2: Long = cid * blkSize
+    // Ata most one column of B is matched with the target
+    if (target < offsetD2 + 1 || target > offsetD2 + mat.numCols) {
+      (false, null)
+    } else {
+      val arr = mat.toArray
+      val v = Array.fill[Double](arr.length)(0.0)
+      for (i <- 0 until mat.numRows) {
+        for (j <- 0 until mat.numCols) {
+          if (math.abs(target - offsetD2 - j - 1) < 1e-6) {
+            v(j * mat.numRows + i) = udf(target, mat(i, j))
+          }
+        }
+      }
+      (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
+    }
+  }
 }
 
 object TestSparse {

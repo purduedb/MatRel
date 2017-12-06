@@ -1854,3 +1854,130 @@ case class JoinOnValuesExecution(left: SparkPlan,
     }
   }
 }
+
+// mode = 1, 2, 3, 4
+// iA = vB, jA = vB, vA = iB, vA = jB
+case class JoinIndexValueExecution(left: SparkPlan,
+                                   leftRowNum: Long,
+                                   leftColNum: Long,
+                                   right: SparkPlan,
+                                   rightRowNum: Long,
+                                   rightColNum: Long,
+                                   mode: Int,
+                                   mergeFunc: (Double, Double) => Double,
+                                   blkSize: Int) extends MatfastPlan {
+
+  lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+
+  override def output: Seq[Attribute] = dim ++ right.output
+
+  override def children: Seq[SparkPlan] = Seq(left, right)
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd1 = left.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+
+    val rdd2 = right.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      ((rid, cid), matrix)
+    }
+
+    val joinRdd = mode match {
+      case 1 => // iA = vB, avoid matching with 0's, shift iA by 1
+        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
+            val offsetD1: Long = rid1 * blkSize
+            val offsetD2: Long = cid1 * blkSize
+            val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+            for (i <- 0 until mat1.numRows) {
+              for (j <- 0 until mat1.numCols) {
+                val offsetRid = offsetD1 + i
+                val offsetCid = offsetD2 + j
+                val join = LocalMatrix.UDF_Element_Match_Index(offsetRid + 1, mat1(i, j), mat2, mergeFunc)
+                if (join._1) {
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                  joinRes += insert
+                }
+              }
+            }
+            joinRes.iterator
+        }
+      case 2 => // jA = vB
+        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
+          val offsetD1: Long = rid1 * blkSize
+          val offsetD2: Long = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          for (i <- 0 until mat1.numRows) {
+            for (j <- 0 until mat1.numCols) {
+              val offsetRid = offsetD1 + i
+              val offsetCid = offsetD2 + j
+              val join = LocalMatrix.UDF_Element_Match_Index(offsetCid + 1, mat1(i, j), mat2, mergeFunc)
+              if (join._1) {
+                val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                joinRes += insert
+              }
+            }
+          }
+          joinRes.iterator
+        }
+      case 3 => // vA = iB
+        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
+          val offsetD1: Long = rid1 * blkSize
+          val offsetD2: Long = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          for (i <- 0 until mat1.numRows) {
+            for (j <- 0 until mat1.numCols) {
+              val offsetRid = offsetD1 + i
+              val offsetCid = offsetD2 + j
+              val join = LocalMatrix.UDF_Value_Match_Index1(mat1(i, j), rid2, mat2, blkSize, mergeFunc)
+              if (join._1) {
+                val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                joinRes += insert
+              }
+            }
+          }
+          joinRes.iterator
+        }
+      case 4 => // vA = jB
+        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
+          val offsetD1: Long = rid1 * blkSize
+          val offsetD2: Long = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          for (i <- 0 until mat1.numRows) {
+            for (j <- 0 until mat1.numCols) {
+              val offsetRid = offsetD1 + i
+              val offsetCid = offsetD2 + j
+              val join = LocalMatrix.UDF_Value_Match_Index2(mat1(i, j), cid2, mat2, blkSize, mergeFunc)
+              if (join._1) {
+                val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                joinRes += insert
+              }
+            }
+          }
+          joinRes.iterator
+        }
+      case _ => throw new SparkException(s"mode not defined, mode = $mode")
+    }
+    joinRdd.map { elem =>
+      val d1 = elem._1._1
+      val d2 = elem._1._2
+      val b3 = elem._1._3
+      val b4 = elem._1._4
+      val matrix = elem._2
+      val res = new GenericInternalRow(5)
+      res.setLong(0, d1)
+      res.setLong(1, d2)
+      res.setInt(2, b3)
+      res.setInt(3, b4)
+      res.update(4, MLMatrixSerializer.serialize(matrix))
+      res
+    }
+  }
+}

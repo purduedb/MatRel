@@ -356,3 +356,28 @@ case class JoinOnValuesOperator(leftChild: LogicalPlan,
 
   override def right: LogicalPlan = rightChild
 }
+
+// There are 4 modes for join 2 matrices on the index and value,
+// i.e., iA = vB, jA = vB, vA = iB, and vA = jB.
+// Variable mode takes 4 values for these 4 cases.
+// mode = 1, 2, 3, 4
+case class JoinIndexValueOperator(leftChild: LogicalPlan,
+                                  leftRowNum: Long,
+                                  leftColNum: Long,
+                                  rightChild: LogicalPlan,
+                                  rightRowNum: Long,
+                                  rightColNum: Long,
+                                  mode: Int,
+                                  mergeFunc: (Double, Double) => Double,
+                                  blkSize: Int) extends BinaryNode {
+
+  lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+
+  override def output: Seq[Attribute] = dim ++ rightChild.output
+
+  override def left: LogicalPlan = leftChild
+
+  override def right: LogicalPlan = rightChild
+}

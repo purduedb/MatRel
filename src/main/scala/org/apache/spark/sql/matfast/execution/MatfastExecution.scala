@@ -1754,39 +1754,95 @@ case class CrossProductExecution(left: SparkPlan,
       val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
       ((rid, cid), matrix)
     }
-    val crossProduct = rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-      // (d1, d2, b3, b4) is different than the original blk ids
-      // here (d1, d2) are the first two indices of the 4d blk
-      // while (b3, b4) are the blk ids
+    computeCrossProduct(rdd1, rdd2, mergeFunc)
+  }
+
+  def computeCrossProduct(rdd1: RDD[((Int, Int), MLMatrix)],
+                          rdd2: RDD[((Int, Int), MLMatrix)],
+                          udf: (Double, Double) => Double): RDD[InternalRow] = {
+
+    val crossProduct = rdd1.cartesian(rdd2).flatMap {
+      case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
+        // (d1, d2, b3, b4) is different than the original blk ids
+        // here (d1, d2) are the first two indices of the 4d blk
+        // while (b3, b4) are the blk ids
         val offsetD1: Long = rid1 * blkSize
         val offsetD2: Long = cid1 * blkSize
         val joinEachFromMat1ToMat2 = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
-        for (i <- 0 until mat1.numRows) {
-          for (j <- 0 until mat1.numCols) {
-            val offsetRid = offsetD1 + i
-            val offsetCid = offsetD2 + j
-            val slice = ((offsetRid, offsetCid, rid2, cid2),
-              LocalMatrix.UDF_Element_Matrix(mat1(i, j), mat2, mergeFunc))
-            joinEachFromMat1ToMat2 += slice
+        val rand = new scala.util.Random()
+        if (math.abs(udf(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
+          mat1 match {
+            case den: DenseMatrix =>
+              for (i <- 0 until den.numRows) {
+                for (j <- 0 until den.numCols) {
+                  if (math.abs(den(i, j) - 0.0) > 1e-6) {
+                    val offsetRid = offsetD1 + i
+                    val offsetCid = offsetD2 + j
+                    val slice = ((offsetRid, offsetCid, rid2, cid2),
+                      LocalMatrix.UDF_Element_Matrix(den(i, j), mat2, udf))
+                    joinEachFromMat1ToMat2 += slice
+                  }
+                }
+              }
+              joinEachFromMat1ToMat2.iterator
+            case sp: SparseMatrix =>
+              if (!sp.isTransposed) { // CSC format
+                for (j <- 0 until sp.numCols) {
+                  for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                    val ind = sp.colPtrs(j) + k
+                    val i = sp.rowIndices(ind)
+                    val offsetRid = offsetD1 + i
+                    val offsetCid = offsetD2 + j
+                    val slice = ((offsetRid, offsetCid, rid2, cid2),
+                      LocalMatrix.UDF_Element_Matrix(sp.values(ind), mat2, udf))
+                    joinEachFromMat1ToMat2 += slice
+                  }
+                }
+                joinEachFromMat1ToMat2.iterator
+              } else { // CSR format
+                for (i <- 0 until sp.numRows) {
+                  for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                    val ind = sp.colPtrs(i) + k
+                    val j = sp.rowIndices(ind)
+                    val offsetRid = offsetD1 + i
+                    val offsetCid = offsetD2 + j
+                    val slice = ((offsetRid, offsetCid, rid2, cid2),
+                      LocalMatrix.UDF_Element_Matrix(sp.values(ind), mat2, udf))
+                    joinEachFromMat1ToMat2 += slice
+                  }
+                }
+                joinEachFromMat1ToMat2.iterator
+              }
+            case _ => throw new SparkException("Illegal matrix type")
           }
+        } else {
+          for (i <- 0 until mat1.numRows) {
+            for (j <- 0 until mat1.numCols) {
+              val offsetRid = offsetD1 + i
+              val offsetCid = offsetD2 + j
+              val slice = ((offsetRid, offsetCid, rid2, cid2),
+                LocalMatrix.UDF_Element_Matrix(mat1(i, j), mat2, udf))
+              joinEachFromMat1ToMat2 += slice
+            }
+          }
+          joinEachFromMat1ToMat2.iterator
         }
-        joinEachFromMat1ToMat2.iterator
+      }
+      crossProduct.map { elem =>
+        val d1 = elem._1._1
+        val d2 = elem._1._2
+        val b3 = elem._1._3
+        val b4 = elem._1._4
+        val matrix = elem._2
+        val res = new GenericInternalRow(5)
+        res.setLong(0, d1)
+        res.setLong(1, d2)
+        res.setInt(2, b3)
+        res.setInt(3, b4)
+        res.update(4, MLMatrixSerializer.serialize(matrix))
+        res
+      }
     }
-    crossProduct.map { elem =>
-      val d1 = elem._1._1
-      val d2 = elem._1._2
-      val b3 = elem._1._3
-      val b4 = elem._1._4
-      val matrix = elem._2
-      val res = new GenericInternalRow(5)
-      res.setLong(0, d1)
-      res.setLong(1, d2)
-      res.setInt(2, b3)
-      res.setInt(3, b4)
-      res.update(4, MLMatrixSerializer.serialize(matrix))
-      res
-    }
-  }
 }
 
 case class JoinOnValuesExecution(left: SparkPlan,
@@ -1820,23 +1876,83 @@ case class JoinOnValuesExecution(left: SparkPlan,
       val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
       ((rid, cid), matrix)
     }
+    computeJoinOnValues(rdd1, rdd2, mergeFunc)
+  }
 
-    val joinValueRdd = rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
+  def computeJoinOnValues(rdd1: RDD[((Int, Int), MLMatrix)],
+                          rdd2: RDD[((Int, Int), MLMatrix)],
+                          udf: (Double, Double) => Double): RDD[InternalRow] = {
+    val joinValueRdd = rdd1.cartesian(rdd2).flatMap {
+      case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
         val offsetD1: Long = rid1 * blkSize
         val offsetD2: Long = cid1 * blkSize
         val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
-        for (i <- 0 until mat1.numRows) {
-          for (j <- 0 until mat1.numCols) {
-            val offsetRid = offsetD1 + i
-            val offsetCid = offsetD2 + j
-            val join = LocalMatrix.UDF_Element_Match(mat1(i, j), mat2, mergeFunc)
-            if (join._1) {
-              val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-              joinRes += insert
+        val rand = new scala.util.Random()
+        if (math.abs(udf(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
+          mat1 match {
+            case den: DenseMatrix =>
+              for (i <- 0 until mat1.numRows) {
+                for (j <- 0 until mat1.numCols) {
+                  if (math.abs(mat1(i, j) - 0.0) > 1e-6) {
+                    val offsetRid = offsetD1 + i
+                    val offsetCid = offsetD2 + j
+                    val join = LocalMatrix.UDF_Element_Match(-1, mat1(i, j), mat2, udf)
+                    if (join._1) {
+                      val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                      joinRes += insert
+                    }
+                  }
+                }
+              }
+              joinRes.iterator
+            case sp: SparseMatrix =>
+              if (!sp.isTransposed) { // CSC format
+                for (j <- 0 until sp.numCols) {
+                  for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                    val ind = sp.colPtrs(j) + k
+                    val i = sp.rowIndices(ind)
+                    val offsetRid = offsetD1 + i
+                    val offsetCid = offsetD2 + j
+                    val join = LocalMatrix.UDF_Element_Match(-1, sp.values(ind), mat2, udf)
+                    if (join._1) {
+                      val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                      joinRes += insert
+                    }
+                  }
+                }
+                joinRes.iterator
+              } else { // CSR format
+                for (i <- 0 until sp.numRows) {
+                  for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                    val ind = sp.colPtrs(i) + k
+                    val j = sp.rowIndices(ind)
+                    val offsetRid = offsetD1 + i
+                    val offsetCid = offsetD2 + j
+                    val join = LocalMatrix.UDF_Element_Match(-1, sp.values(ind), mat2, udf)
+                    if (join._1) {
+                      val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                      joinRes += insert
+                    }
+                  }
+                }
+                joinRes.iterator
+              }
+            case _ => throw new SparkException("Illegal matrix type")
+          }
+        } else {
+          for (i <- 0 until mat1.numRows) {
+            for (j <- 0 until mat1.numCols) {
+              val offsetRid = offsetD1 + i
+              val offsetCid = offsetD2 + j
+              val join = LocalMatrix.UDF_Element_Match(-1, mat1(i, j), mat2, udf)
+              if (join._1) {
+                val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                joinRes += insert
+              }
             }
           }
+          joinRes.iterator
         }
-        joinRes.iterator
     }
     joinValueRdd.map { elem =>
       val d1 = elem._1._1
@@ -1900,7 +2016,8 @@ case class JoinIndexValueExecution(left: SparkPlan,
               for (j <- 0 until mat1.numCols) {
                 val offsetRid = offsetD1 + i
                 val offsetCid = offsetD2 + j
-                val join = LocalMatrix.UDF_Element_Match_Index(offsetRid + 1, mat1(i, j), mat2, mergeFunc)
+                val join = LocalMatrix.UDF_Element_Match(offsetRid + 1,
+                  mat1(i, j), mat2, mergeFunc)
                 if (join._1) {
                   val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                   joinRes += insert
@@ -1918,7 +2035,8 @@ case class JoinIndexValueExecution(left: SparkPlan,
             for (j <- 0 until mat1.numCols) {
               val offsetRid = offsetD1 + i
               val offsetCid = offsetD2 + j
-              val join = LocalMatrix.UDF_Element_Match_Index(offsetCid + 1, mat1(i, j), mat2, mergeFunc)
+              val join = LocalMatrix.UDF_Element_Match(offsetCid + 1,
+                mat1(i, j), mat2, mergeFunc)
               if (join._1) {
                 val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                 joinRes += insert
@@ -1932,14 +2050,70 @@ case class JoinIndexValueExecution(left: SparkPlan,
           val offsetD1: Long = rid1 * blkSize
           val offsetD2: Long = cid1 * blkSize
           val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
-          for (i <- 0 until mat1.numRows) {
-            for (j <- 0 until mat1.numCols) {
-              val offsetRid = offsetD1 + i
-              val offsetCid = offsetD2 + j
-              val join = LocalMatrix.UDF_Value_Match_Index1(mat1(i, j), rid2, mat2, blkSize, mergeFunc)
-              if (join._1) {
-                val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                joinRes += insert
+          val rand = new scala.util.Random()
+          // preserving 0's on the left
+          if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
+            mat1 match {
+              case den: DenseMatrix =>
+                for (i <- 0 until den.numRows) {
+                  for (j <- 0 until den.numCols) {
+                    if (math.abs(den(i, j) - 0.0) > 1e-6) {
+                      val offsetRid = offsetD1 + i
+                      val offsetCid = offsetD2 + j
+                      val join = LocalMatrix.UDF_Value_Match_Index1(den(i, j), rid2, mat2,
+                        blkSize, mergeFunc)
+                      if (join._1) {
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                        joinRes += insert
+                      }
+                    }
+                  }
+                }
+              case sp: SparseMatrix =>
+                if (!sp.isTransposed) { // CSC format
+                  for (j <- 0 until sp.numCols) {
+                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                      val ind = sp.colPtrs(j) + k
+                      val i = sp.rowIndices(ind)
+                      val offsetRid = offsetD1 + i
+                      val offsetCid = offsetD2 + j
+                      val join = LocalMatrix.UDF_Value_Match_Index1(sp.values(ind), rid2, mat2,
+                        blkSize, mergeFunc)
+                      if (join._1) {
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                        joinRes += insert
+                      }
+                    }
+                  }
+                } else { // CSR format
+                  for (i <- 0 until sp.numRows) {
+                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                      val ind = sp.colPtrs(i) + k
+                      val j = sp.rowIndices(ind)
+                      val offsetRid = offsetD1 + i
+                      val offsetCid = offsetD2 + j
+                      val join = LocalMatrix.UDF_Value_Match_Index1(sp.values(ind), rid2, mat2,
+                        blkSize, mergeFunc)
+                      if (join._1) {
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                        joinRes += insert
+                      }
+                    }
+                  }
+                }
+              case _ => throw new SparkException("Illegal matrix type")
+            }
+          } else { // not preserving of 0's on the left
+            for (i <- 0 until mat1.numRows) {
+              for (j <- 0 until mat1.numCols) {
+                val offsetRid = offsetD1 + i
+                val offsetCid = offsetD2 + j
+                val join = LocalMatrix.UDF_Value_Match_Index1(mat1(i, j), rid2, mat2,
+                  blkSize, mergeFunc)
+                if (join._1) {
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                  joinRes += insert
+                }
               }
             }
           }
@@ -1950,14 +2124,69 @@ case class JoinIndexValueExecution(left: SparkPlan,
           val offsetD1: Long = rid1 * blkSize
           val offsetD2: Long = cid1 * blkSize
           val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
-          for (i <- 0 until mat1.numRows) {
-            for (j <- 0 until mat1.numCols) {
-              val offsetRid = offsetD1 + i
-              val offsetCid = offsetD2 + j
-              val join = LocalMatrix.UDF_Value_Match_Index2(mat1(i, j), cid2, mat2, blkSize, mergeFunc)
-              if (join._1) {
-                val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                joinRes += insert
+          val rand = new scala.util.Random()
+          if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
+            mat1 match {
+              case den: DenseMatrix =>
+                for (i <- 0 until den.numRows) {
+                  for (j <- 0 until den.numCols) {
+                    if (math.abs(den(i, j) - 0.0) > 1e-6) {
+                      val offsetRid = offsetD1 + i
+                      val offsetCid = offsetD2 + j
+                      val join = LocalMatrix.UDF_Value_Match_Index2(den(i, j), cid2, mat2,
+                        blkSize, mergeFunc)
+                      if (join._1) {
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                        joinRes += insert
+                      }
+                    }
+                  }
+                }
+              case sp: SparseMatrix =>
+                if (!sp.isTransposed) { // CSC format
+                  for (j <- 0 until sp.numCols) {
+                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                      val ind = sp.colPtrs(j) + k
+                      val i = sp.rowIndices(ind)
+                      val offsetRid = offsetD1 + i
+                      val offsetCid = offsetD2 + j
+                      val join = LocalMatrix.UDF_Value_Match_Index1(sp.values(ind), cid2, mat2,
+                        blkSize, mergeFunc)
+                      if (join._1) {
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                        joinRes += insert
+                      }
+                    }
+                  }
+                } else { // CSR format
+                  for (i <- 0 until sp.numRows) {
+                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                      val ind = sp.colPtrs(i) + k
+                      val j = sp.rowIndices(ind)
+                      val offsetRid = offsetD1 + i
+                      val offsetCid = offsetD2 + j
+                      val join = LocalMatrix.UDF_Value_Match_Index1(sp.values(ind), cid2, mat2,
+                        blkSize, mergeFunc)
+                      if (join._1) {
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                        joinRes += insert
+                      }
+                    }
+                  }
+                }
+              case _ => throw new SparkException("Illegal matrix type")
+            }
+          } else {
+            for (i <- 0 until mat1.numRows) {
+              for (j <- 0 until mat1.numCols) {
+                val offsetRid = offsetD1 + i
+                val offsetCid = offsetD2 + j
+                val join = LocalMatrix.UDF_Value_Match_Index2(mat1(i, j), cid2, mat2,
+                  blkSize, mergeFunc)
+                if (join._1) {
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                  joinRes += insert
+                }
               }
             }
           }

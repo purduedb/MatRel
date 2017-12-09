@@ -24,6 +24,7 @@ import org.apache.spark.SparkException
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import util.control.Breaks._
 
 /**
   * Expose some common operations on MLMatrices.
@@ -1175,52 +1176,136 @@ object LocalMatrix {
   }
 
   def UDF_Element_Matrix(x: Double, mat: MLMatrix, udf: (Double, Double) => Double): MLMatrix = {
-    val arr = mat.toArray
-    val v = Array.fill[Double](arr.length)(0.0)
-    var nnz = 0
-    for (i <- 0 until v.length) {
-      v(i) = udf(x, arr(i))
-      if (v(i) != 0) nnz += 1
-    }
-    if (nnz > 0.5 * mat.numRows * mat.numCols) {
-      new DenseMatrix(mat.numRows, mat.numCols, v)
-    } else {
-      new DenseMatrix(mat.numRows, mat.numCols, v).toSparse
+    val rand = new scala.util.Random()
+    if (math.abs(udf(rand.nextDouble(), 0.0) - 0.0) < 1e-6) { // preserving sparsity of the input
+      mat match {
+        case den: DenseMatrix =>
+          val v = den.values
+          for (i <- 0 until v.length) {
+            v(i) = udf(x, v(i))
+          }
+          new DenseMatrix(den.numRows, den.numCols, v, den.isTransposed)
+        case sp: SparseMatrix =>
+          val v = sp.values
+          for (i <- 0 until v.length) {
+            v(i) = udf(x, v(i))
+          }
+          new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, v, sp.isTransposed)
+        case _ => throw new SparkException("Illegal matrix type")
+      }
+    } else { // not preserving sparsity of the input
+      val arr = mat.toArray
+      val v = Array.fill[Double](arr.length)(0.0)
+      var nnz = 0
+      for (i <- 0 until v.length) {
+        v(i) = udf(x, arr(i))
+        if (v(i) != 0) nnz += 1
+      }
+      if (nnz > 0.5 * mat.numRows * mat.numCols) {
+        new DenseMatrix(mat.numRows, mat.numCols, v)
+      } else {
+        new DenseMatrix(mat.numRows, mat.numCols, v).toSparse
+      }
     }
   }
 
-  def UDF_Element_Match(target: Double, mat: MLMatrix,
+  // ind = -1; match the cell values
+  // ind > 0, match the index and merge the cell values
+  def UDF_Element_Match(ind: Long, cell: Double, mat: MLMatrix,
                         udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
-
-    val arr = mat.toArray
-    val v = Array.fill[Double](arr.length)(0.0)
-    var nnz = 0
-    for (i <- 0 until v.length) {
-      if (math.abs(target - arr(i)) < 1e-6) {
-        v(i) = udf(target, arr(i))
+    val rand = new scala.util.Random()
+    if (math.abs(udf(rand.nextDouble(), 0.0) - 0.0) < 1e-6) {
+      mat match {
+        case den: DenseMatrix =>
+          val filteredValues = Array.fill[Double](den.values.length)(0.0)
+          var nnz = 0
+          for (i <- 0 until den.values.length) {
+            if (ind < 0) { // match values
+              if (math.abs(cell - den.values(i)) < 1e-6) {
+                filteredValues(i) = udf(cell, den.values(i))
+                nnz += 1
+              }
+            } else { // match indices
+              if (math.abs(ind - den.values(i)) < 1e-6) {
+                filteredValues(i) = udf(cell, den.values(i))
+                nnz += 1
+              }
+            }
+          }
+          if (nnz == 0) {
+            (false, null)
+          } else if (nnz > 0.5 * den.numRows * den.numCols) {
+            (true, new DenseMatrix(den.numRows, den.numCols, filteredValues, den.isTransposed))
+          } else {
+            (true, new DenseMatrix(den.numRows, den.numCols,
+              filteredValues, den.isTransposed).toSparse)
+          }
+        case sp: SparseMatrix =>
+          val filteredValues = ArrayBuffer.empty[Double]
+          val filteredRowIndices = ArrayBuffer.empty[Int]
+          val filteredColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
+          var total = 0
+          for (i <- 0 until sp.values.length) {
+            if (ind < 0) {
+              if (Math.abs(cell - sp.values(i)) <= 1e-6) {
+                total += 1
+                filteredValues += udf(cell, sp.values(i))
+                filteredRowIndices += sp.rowIndices(i)
+                for (j <- 1 until filteredColPtrs.length) {
+                  breakable {
+                    if (i >= sp.colPtrs(j - 1) && i < sp.colPtrs(j)) {
+                      filteredColPtrs(j) += 1
+                      break
+                    }
+                  }
+                }
+              }
+            } else {
+              if (Math.abs(ind - sp.values(i)) <= 1e-6) {
+                total += 1
+                filteredValues += udf(cell, sp.values(i))
+                filteredRowIndices += sp.rowIndices(i)
+                for (j <- 1 until filteredColPtrs.length) {
+                  breakable {
+                    if (i >= sp.colPtrs(j - 1) && i < sp.colPtrs(j)) {
+                      filteredColPtrs(j) += 1
+                      break
+                    }
+                  }
+                }
+              }
+            }
+          }
+          filteredColPtrs(sp.colPtrs.length - 1) = total
+          for (k <- 1 until filteredColPtrs.length - 1) {
+            filteredColPtrs(k) += filteredColPtrs(k - 1)
+          }
+          (true, new SparseMatrix(sp.numRows, sp.numCols, filteredColPtrs,
+            filteredRowIndices.toArray, filteredValues.toArray, sp.isTransposed))
+        case _ => throw new SparkException("Illegal matrix type")
       }
-      if (v(i) != 0) nnz += 1
-    }
-
-    if (nnz == 0) {
-      (false, null)
-    } else if (nnz > 0.5 * mat.numRows * mat.numCols) {
-      (true, new DenseMatrix(mat.numRows, mat.numCols, v))
     } else {
-      (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
+      match_matrix_cells(ind, cell, mat, udf)
     }
   }
 
-  def UDF_Element_Match_Index(ind: Long, cell: Double, mat: MLMatrix,
-                              udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
+   def match_matrix_cells(ind: Long, cell: Double, mat: MLMatrix,
+                          udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
     val arr = mat.toArray
     val v = Array.fill[Double](arr.length)(0.0)
     var nnz = 0
     for (i <- 0 until v.length) {
-      if (math.abs(ind - arr(i)) < 1e-6) {
-        v(i) = udf(cell, arr(i))
+      if (ind < 0) { // match cell values
+        if (math.abs(cell - arr(i)) < 1e-6) {
+          v(i) = udf(cell, arr(i))
+        }
+        if (v(i) != 0) nnz += 1
+      } else { // match indices
+        if (math.abs(ind - arr(i)) < 1e-6) {
+          v(i) = udf(cell, arr(i))
+        }
+        if (v(i) != 0) nnz += 1
       }
-      if (v(i) != 0) nnz += 1
     }
 
     if (nnz == 0) {

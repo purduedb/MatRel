@@ -1317,7 +1317,9 @@ object LocalMatrix {
     }
   }
 
-  def UDF_Value_Match_Index1(cell: Double, rid: Int, mat: MLMatrix, blkSize: Int,
+  // idx < 0; match cell value with index1
+  // idx > 0; match idx with index1
+  def UDF_Value_Match_Index1(idx: Long, cell: Double, rid: Int, mat: MLMatrix, blkSize: Int,
                              udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
     val offsetD1: Long = rid * blkSize
     // At most one row of B is matched with the cell
@@ -1331,9 +1333,16 @@ object LocalMatrix {
             val v = Array.fill[Double](den.values.length)(0.0)
             for (i <- 0 until den.numRows) {
               for (j <- 0 until den.numCols) {
-                if (math.abs(den(i, j) - 0.0) > 1e-6 &&
-                  math.abs(cell - offsetD1 - i - 1) < 1e-6) {
-                  v(j * den.numRows + i) = udf(cell, den(i, j))
+                if (idx < 0) {
+                  if (math.abs(den(i, j) - 0.0) > 1e-6 &&
+                    math.abs(cell - offsetD1 - i - 1) < 1e-6) {
+                    v(j * den.numRows + i) = udf(cell, den(i, j))
+                  }
+                } else {
+                  if (math.abs(den(i, j) - 0.0) > 1e-6 &&
+                  math.abs(idx - offsetD1 - i - 1) < 1e-6) {
+                    v(j * den.numRows + i) = udf(cell, den(i, j))
+                  }
                 }
               }
             }
@@ -1347,10 +1356,18 @@ object LocalMatrix {
                 for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
                   val ind = sp.colPtrs(j) + k
                   val rowInd = sp.rowIndices(ind)
-                  if (math.abs(cell - offsetD1 - rowInd - 1) < 1e-6) {
-                    matchRowIndices += rowInd
-                    matchValues += udf(cell, sp.values(ind))
-                    matchColPtrs(j) += 1
+                  if (idx < 0) {
+                    if (math.abs(cell - offsetD1 - rowInd - 1) < 1e-6) {
+                      matchRowIndices += rowInd
+                      matchValues += udf(cell, sp.values(ind))
+                      matchColPtrs(j) += 1
+                    }
+                  } else {
+                    if (math.abs(idx - offsetD1 - rowInd - 1) < 1e-6) {
+                      matchRowIndices += rowInd
+                      matchValues += udf(cell, sp.values(ind))
+                      matchColPtrs(j) += 1
+                    }
                   }
                 }
               }
@@ -1365,12 +1382,23 @@ object LocalMatrix {
               val matchColIndices = ArrayBuffer.empty[Int]
               val matchRowPtrs = Array.fill[Int](sp.colPtrs.length)(0)
               for (i <- 0 until sp.numRows) {
-                if (math.abs(cell - offsetD1 - i - 1) < 1e-6) {
-                  for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
-                    val ind = sp.colPtrs(i) + k
-                    matchColIndices += sp.rowIndices(ind)
-                    matchValues += udf(cell, sp.values(ind))
-                    matchRowPtrs(i) += 1
+                if (idx < 0) {
+                  if (math.abs(cell - offsetD1 - i - 1) < 1e-6) {
+                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                      val ind = sp.colPtrs(i) + k
+                      matchColIndices += sp.rowIndices(ind)
+                      matchValues += udf(cell, sp.values(ind))
+                      matchRowPtrs(i) += 1
+                    }
+                  }
+                } else {
+                  if (math.abs(idx - offsetD1 - i - 1) < 1e-6) {
+                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                      val ind = sp.colPtrs(i) + k
+                      matchColIndices += sp.rowIndices(ind)
+                      matchValues += udf(cell, sp.values(ind))
+                      matchRowPtrs(i) += 1
+                    }
                   }
                 }
               }
@@ -1388,8 +1416,14 @@ object LocalMatrix {
         val v = Array.fill[Double](arr.length)(0.0)
         for (i <- 0 until mat.numRows) {
           for (j <- 0 until mat.numCols) {
-            if (math.abs(cell - offsetD1 - i - 1) < 1e-6) {
-              v(j * mat.numRows + i) = udf(cell, mat(i, j))
+            if (idx < 0) {
+              if (math.abs(cell - offsetD1 - i - 1) < 1e-6) {
+                v(j * mat.numRows + i) = udf(cell, mat(i, j))
+              }
+            } else {
+              if (math.abs(idx - offsetD1 - i - 1) < 1e-6) {
+                v(j * mat.numRows + i) = udf(cell, mat(i, j))
+              }
             }
           }
         }
@@ -1398,7 +1432,9 @@ object LocalMatrix {
     }
   }
 
-  def UDF_Value_Match_Index2(cell: Double, cid: Int, mat: MLMatrix, blkSize: Int,
+  // idx < 0; match cell value with index2
+  // idx > 0; match idx with index2
+  def UDF_Value_Match_Index2(idx: Long, cell: Double, cid: Int, mat: MLMatrix, blkSize: Int,
                              udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
     val offsetD2: Long = cid * blkSize
     // At most one column of B is matched with the cell
@@ -1412,9 +1448,16 @@ object LocalMatrix {
             val v = Array.fill[Double](den.values.length)(0.0)
             for (i <- 0 until den.numRows) {
               for (j <- 0 until den.numCols) {
-                if (math.abs(den(i, j) - 0.0) > 1e-6 &&
-                math.abs(cell - offsetD2 - j - 1) < 1e-6) {
-                  v(j * den.numRows + i) = udf(cell, den(i, j))
+                if (idx < 0) {
+                  if (math.abs(den(i, j) - 0.0) > 1e-6 &&
+                    math.abs(cell - offsetD2 - j - 1) < 1e-6) {
+                    v(j * den.numRows + i) = udf(cell, den(i, j))
+                  }
+                } else {
+                  if (math.abs(den(i, j) - 0.0) > 1e-6 &&
+                    math.abs(idx - offsetD2 - j - 1) < 1e-6) {
+                    v(j * den.numRows + i) = udf(cell, den(i, j))
+                  }
                 }
               }
             }
@@ -1425,12 +1468,23 @@ object LocalMatrix {
               val matchRowIndices = ArrayBuffer.empty[Int]
               val matchColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
               for (j <- 0 until sp.numCols) {
-                if (math.abs(cell - offsetD2 - j - 1) < 1e-6) {
-                  for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
-                    val ind = sp.colPtrs(j) + k
-                    matchRowIndices += sp.rowIndices(ind)
-                    matchValues += udf(cell, sp.values(ind))
-                    matchColPtrs(j) += 1
+                if (idx < 0) {
+                  if (math.abs(cell - offsetD2 - j - 1) < 1e-6) {
+                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                      val ind = sp.colPtrs(j) + k
+                      matchRowIndices += sp.rowIndices(ind)
+                      matchValues += udf(cell, sp.values(ind))
+                      matchColPtrs(j) += 1
+                    }
+                  }
+                } else {
+                  if (math.abs(idx - offsetD2 - j - 1) < 1e-6) {
+                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                      val ind = sp.colPtrs(j) + k
+                      matchRowIndices += sp.rowIndices(ind)
+                      matchValues += udf(cell, sp.values(ind))
+                      matchColPtrs(j) += 1
+                    }
                   }
                 }
               }
@@ -1448,10 +1502,18 @@ object LocalMatrix {
                 for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
                   val ind = sp.colPtrs(i) + k
                   val colInd = sp.rowIndices(ind)
-                  if (math.abs(cell - offsetD2 - colInd - 1) < 1e-6) {
-                    matchColIndices += colInd
-                    matchValues += udf(cell, sp.values(ind))
-                    matchRowPtrs(i) += 1
+                  if (idx < 0) {
+                    if (math.abs(cell - offsetD2 - colInd - 1) < 1e-6) {
+                      matchColIndices += colInd
+                      matchValues += udf(cell, sp.values(ind))
+                      matchRowPtrs(i) += 1
+                    }
+                  } else {
+                    if (math.abs(idx - offsetD2 - colInd - 1) < 1e-6) {
+                      matchColIndices += colInd
+                      matchValues += udf(cell, sp.values(ind))
+                      matchRowPtrs(i) += 1
+                    }
                   }
                 }
               }
@@ -1469,8 +1531,14 @@ object LocalMatrix {
         val v = Array.fill[Double](arr.length)(0.0)
         for (i <- 0 until mat.numRows) {
           for (j <- 0 until mat.numCols) {
-            if (math.abs(cell - offsetD2 - j - 1) < 1e-6) {
-              v(j * mat.numRows + i) = udf(cell, mat(i, j))
+            if (idx < 0) {
+              if (math.abs(cell - offsetD2 - j - 1) < 1e-6) {
+                v(j * mat.numRows + i) = udf(cell, mat(i, j))
+              }
+            } else {
+              if (math.abs(idx - offsetD2 - j - 1) < 1e-6) {
+                v(j * mat.numRows + i) = udf(cell, mat(i, j))
+              }
             }
           }
         }

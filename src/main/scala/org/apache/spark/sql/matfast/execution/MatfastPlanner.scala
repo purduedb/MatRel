@@ -457,6 +457,10 @@ object MatrixOperators extends Strategy {
     right, rightRowNum, rightColNum, mode, mergeFunc, blkSize) =>
       JoinIndexValueExecution(planLater(left), leftRowNum, leftColNum,
         planLater(right), rightRowNum, rightColNum, mode, mergeFunc, blkSize) :: Nil
+    case JoinIndexOperator(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, mode, mergeFunc, blkSize) =>
+      JoinIndexExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, mode, mergeFunc, blkSize) :: Nil
     case _ => Nil
   }
 }

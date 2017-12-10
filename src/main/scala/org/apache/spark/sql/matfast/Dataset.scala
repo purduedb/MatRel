@@ -304,6 +304,18 @@ class Dataset[T] private[matfast]
       right.logicalPlan, rightRowNum, rightColNum, mode, mergeFunc, blkSize)
   }
 
+  def joinIndicex(leftRowNum: Long, leftColNum: Long,
+                  right: Dataset[_],
+                  rightRowNum: Long, rightColNum: Long,
+                  mode: Int,
+                  mergeFunc: (Double, Double) => Double,
+                  blkSize: Int,
+                  data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    JoinIndexOperator(this.logicalPlan, leftRowNum, leftColNum,
+      right.logicalPlan, rightRowNum, rightColNum, mode, mergeFunc, blkSize)
+  }
+
   private def getAttributes(keys: Array[String],
                             attrs: Seq[Attribute] =
                             this.queryExecution.analyzed.output): Array[Attribute] = {

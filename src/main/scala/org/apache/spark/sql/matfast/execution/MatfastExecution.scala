@@ -2356,9 +2356,20 @@ case class JoinIndexValueExecution(left: SparkPlan,
     val joinRdd = mode match {
       case 1 => // iA = iB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-            val offsetD1: Long = rid1 * blkSize
-            val joinRes = new ArrayBuffer[((Long, Int, Int), MLMatrix)]()
-            joinRes.iterator
+          val offsetD1: Long = rid1 * blkSize
+          val joinRes = new ArrayBuffer[((Long, Int, Int), MLMatrix)]()
+          val rand = new scala.util.Random()
+          if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
+
+          } else {
+            for (i <- 0 until mat1.numRows) {
+              for (j <- 0 until mat1.numCols) {
+                val offsetRid = offsetD1 + i
+                val join = LocalMatrix.UDF_Value_Match_Index1()
+              }
+            }
+          }
+          joinRes.iterator
         }
       case 2 => // iA = jB
       case 3 => // jA = iB

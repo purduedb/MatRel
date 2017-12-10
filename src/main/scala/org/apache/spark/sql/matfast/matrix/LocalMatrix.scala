@@ -1317,23 +1317,84 @@ object LocalMatrix {
     }
   }
 
-  def UDF_Value_Match_Index1(target: Double, rid: Int, mat: MLMatrix, blkSize: Int,
+  def UDF_Value_Match_Index1(cell: Double, rid: Int, mat: MLMatrix, blkSize: Int,
                              udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
     val offsetD1: Long = rid * blkSize
     // At most one row of B is matched with the target
-    if (target < offsetD1 + 1 || target > offsetD1 + mat.numRows) {
+    if (cell < offsetD1 + 1 || cell > offsetD1 + mat.numRows) {
       (false, null)
     } else {
-      val arr = mat.toArray
-      val v = Array.fill[Double](arr.length)(0.0)
-      for (i <- 0 until mat.numRows) {
-        for (j <- 0 until mat.numCols) {
-          if (math.abs(target - offsetD1 - i - 1) < 1e-6) {
-            v(j * mat.numRows + i) = udf(target, mat(i, j))
+      val rand = new scala.util.Random()
+      if (math.abs(udf(rand.nextDouble(), 0.0) - 0.0) < 1e-6) {
+        mat match {
+          case den: DenseMatrix =>
+            val v = Array.fill[Double](den.values.length)(0.0)
+            for (i <- 0 until den.numRows) {
+              for (j <- 0 until den.numCols) {
+                if (math.abs(den(i, j) - 0.0) > 1e-6 &&
+                  math.abs(cell - offsetD1 - i - 1) < 1e-6) {
+                  v(j * den.numRows + i) = udf(cell, den(i, j))
+                }
+              }
+            }
+            (true, new DenseMatrix(den.numRows, den.numCols, v).toSparse)
+          case sp: SparseMatrix =>
+            if (!sp.isTransposed) { // CSC format
+              val matchValues = ArrayBuffer.empty[Double]
+              val matchRowIndices = ArrayBuffer.empty[Int]
+              val matchColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
+              for (j <- 0 until sp.numCols) {
+                for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                  val ind = sp.colPtrs(j) + k
+                  val rowInd = sp.rowIndices(ind)
+                  if (math.abs(cell - offsetD1 - rowInd - 1) < 1e-6) {
+                    matchRowIndices += rowInd
+                    matchValues += udf(cell, sp.values(ind))
+                    matchColPtrs(j) += 1
+                  }
+                }
+              }
+              for (j <- 1 until matchColPtrs.length) {
+                matchColPtrs(j) += matchColPtrs(j - 1)
+              }
+              matchColPtrs(matchColPtrs.length - 1) = matchValues.length
+              (true, new SparseMatrix(sp.numRows, sp.numCols,
+                matchColPtrs, matchRowIndices.toArray, matchValues.toArray, sp.isTransposed))
+            } else { // CSR format
+              val matchValues = ArrayBuffer.empty[Double]
+              val matchColIndices = ArrayBuffer.empty[Int]
+              val matchRowPtrs = Array.fill[Int](sp.colPtrs.length)(0)
+              for (i <- 0 until sp.numRows) {
+                if (math.abs(cell - offsetD1 - i - 1) < 1e-6) {
+                  for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                    val ind = sp.colPtrs(i) + k
+                    matchColIndices += sp.rowIndices(ind)
+                    matchValues += udf(cell, sp.values(ind))
+                    matchRowPtrs(i) += 1
+                  }
+                }
+              }
+              for (i <- 1 until matchRowPtrs.length) {
+                matchRowPtrs(i) += matchRowPtrs(i - 1)
+              }
+              matchRowPtrs(matchRowPtrs.length - 1) = matchValues.length
+              (true, new SparseMatrix(sp.numRows, sp.numCols,
+                matchRowPtrs, matchColIndices.toArray, matchValues.toArray, sp.isTransposed))
+            }
+          case _ => throw new SparkException("Illegal matrix type")
+        }
+      } else {
+        val arr = mat.toArray
+        val v = Array.fill[Double](arr.length)(0.0)
+        for (i <- 0 until mat.numRows) {
+          for (j <- 0 until mat.numCols) {
+            if (math.abs(cell - offsetD1 - i - 1) < 1e-6) {
+              v(j * mat.numRows + i) = udf(cell, mat(i, j))
+            }
           }
         }
+        (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
       }
-      (true, new DenseMatrix(mat.numRows, mat.numCols, v).toSparse)
     }
   }
 

@@ -304,7 +304,7 @@ class Dataset[T] private[matfast]
       right.logicalPlan, rightRowNum, rightColNum, mode, mergeFunc, blkSize)
   }
 
-  def joinIndicex(leftRowNum: Long, leftColNum: Long,
+  def joinIndices(leftRowNum: Long, leftColNum: Long,
                   right: Dataset[_],
                   rightRowNum: Long, rightColNum: Long,
                   mode: Int,

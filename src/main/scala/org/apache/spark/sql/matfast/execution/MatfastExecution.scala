@@ -2665,3 +2665,64 @@ case class JoinIndexExecution(left: SparkPlan,
     }
   }
 }
+
+case class GroupBy4DTensorExecution(child: SparkPlan,
+                                    dims: Int,
+                                    aggFunc: (Double, Double) => Double) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd = child.execute()
+    val rootRdd = rdd.map { row =>
+      val d1 = row.getLong(0)
+      val d2 = row.getLong(1)
+      val b3 = row.getInt(2)
+      val b4 = row.getInt(3)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(4, 7))
+      ((d1, d2, b3, b4), matrix)
+    }
+
+    dims match {
+      case 1 =>
+        rootRdd.map { case ((d1, d2, b3, b4), mat) =>
+          (d1, (d2, b3, b4, mat))
+        }.groupByKey()
+          .flatMap { case (d1, iter) =>
+            for (blk <- iter)
+              yield (d1, LocalMatrix.aggregate(blk._4, aggFunc))
+          }.reduceByKey(aggFunc(_, _))
+          .map { row =>
+            val res = new GenericInternalRow(5)
+            val mat = new DenseMatrix(1, 1, Array(row._2))
+            res.setLong(0, row._1)
+            res.setLong(1, -1L)
+            res.setInt(2, -1)
+            res.setInt(3, -1)
+            res.update(4, MLMatrixSerializer.serialize(mat))
+            res
+          }
+      case 2 =>
+        rootRdd.map { case ((d1, d2, b3, b4), mat) =>
+          ((d1, d2), (b3, b4, mat))
+        }.groupByKey()
+          .flatMap { case ((d1, d2), iter) =>
+            for (blk <- iter)
+              yield ((d1, d2), LocalMatrix.aggregate(blk._3, aggFunc))
+          }.reduceByKey(aggFunc(_, _))
+            .map { row =>
+              val res = new GenericInternalRow(5)
+              val mat = new DenseMatrix(1, 1, Array(row._2))
+              res.setLong(0, row._1._1)
+              res.setLong(1, row._1._2)
+              res.setInt(2, -1)
+              res.setInt(3, -1)
+              res.update(4, MLMatrixSerializer.serialize(mat))
+              res
+            }
+      case _ => throw new SparkException(s"Unsupported dims parameter, dims=$dims")
+    }
+  }
+}

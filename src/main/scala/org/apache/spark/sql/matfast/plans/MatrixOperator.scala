@@ -407,3 +407,10 @@ case class JoinIndexOperator(leftChild: LogicalPlan,
 
   override def right: LogicalPlan = rightChild
 }
+
+case class GroupBy4DTensorOperator(child: LogicalPlan,
+                                   dims: Int, // we allow dims = 1, 2 for now
+                                   aggFunc: (Double, Double) => Double) extends UnaryNode {
+
+  override def output: Seq[Attribute] = child.output
+}

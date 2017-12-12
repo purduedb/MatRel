@@ -32,6 +32,21 @@ import util.control.Breaks._
   */
 
 object LocalMatrix {
+
+  def aggregate(mat: MLMatrix, agg: (Double, Double) => Double): Double = {
+    if (mat == null) {
+      throw new SparkException("matrix cannot be null for aggregation")
+    } else {
+      mat match {
+        case den: DenseMatrix =>
+         den.values.reduce(agg)
+        case sp: SparseMatrix =>
+         sp.values.reduce(agg)
+        case _ => throw new SparkException("Illegal matrix type")
+      }
+    }
+  }
+
   def compute(a: MLMatrix, b: MLMatrix, f: (Double, Double) => Double): MLMatrix = {
     if (a != null && b != null) {
       require(a.numRows == b.numRows,

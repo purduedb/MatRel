@@ -461,6 +461,8 @@ object MatrixOperators extends Strategy {
     right, rightRowNum, rightColNum, mode, mergeFunc, blkSize) =>
       JoinIndexExecution(planLater(left), leftRowNum, leftColNum,
         planLater(right), rightRowNum, rightColNum, mode, mergeFunc, blkSize) :: Nil
+    case GroupBy4DTensorOperator(ch, dims, aggFunc) =>
+      GroupBy4DTensorExecution(planLater(ch), dims, aggFunc) :: Nil
     case _ => Nil
   }
 }

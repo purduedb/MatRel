@@ -316,6 +316,12 @@ class Dataset[T] private[matfast]
       right.logicalPlan, rightRowNum, rightColNum, mode, mergeFunc, blkSize)
   }
 
+  def groupBy4DTensor(dims: Int, aggFunc: (Double, Double) => Double,
+                      data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
+  = withPlan {
+    GroupBy4DTensorOperator(this.logicalPlan, dims, aggFunc)
+  }
+
   private def getAttributes(keys: Array[String],
                             attrs: Seq[Attribute] =
                             this.queryExecution.analyzed.output): Array[Attribute] = {

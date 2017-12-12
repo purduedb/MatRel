@@ -2332,7 +2332,8 @@ case class JoinIndexExecution(left: SparkPlan,
                               blkSize: Int) extends MatfastPlan {
 
   lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)))
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
 
   override def output: Seq[Attribute] = dim ++ right.output
 
@@ -2358,7 +2359,7 @@ case class JoinIndexExecution(left: SparkPlan,
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
           val offsetD1: Long = rid1 * blkSize
           val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Int, Int), MLMatrix)]()
+          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2371,7 +2372,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, den(i, j),
                         rid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetCid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2388,7 +2389,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, sp.values(ind),
                         rid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetCid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2403,7 +2404,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, sp.values(ind),
                         rid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetCid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2419,7 +2420,7 @@ case class JoinIndexExecution(left: SparkPlan,
                 val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, mat1(i, j),
                   rid2, mat2, blkSize, mergeFunc)
                 if (join._1) {
-                  val insert = ((offsetCid, rid2, cid2), join._2)
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                   joinRes += insert
                 }
               }
@@ -2431,7 +2432,7 @@ case class JoinIndexExecution(left: SparkPlan,
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
           val offsetD1: Long = rid1 * blkSize
           val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Int, Int), MLMatrix)]()
+          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2444,7 +2445,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, den(i, j),
                         cid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetCid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2461,7 +2462,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, sp.values(ind),
                         cid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetCid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2476,7 +2477,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, sp.values(ind),
                         cid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetCid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2492,7 +2493,7 @@ case class JoinIndexExecution(left: SparkPlan,
                 val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, mat1(i, j),
                   cid2, mat2, blkSize, mergeFunc)
                 if (join._1) {
-                  val insert = ((offsetCid, rid2, cid2), join._2)
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                   joinRes += insert
                 }
               }
@@ -2504,7 +2505,7 @@ case class JoinIndexExecution(left: SparkPlan,
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
           val offsetD1: Long = rid1 * blkSize
           val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Int, Int), MLMatrix)]()
+          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2517,7 +2518,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, den(i, j),
                         rid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetRid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2534,7 +2535,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, sp.values(ind),
                         rid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetRid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2549,7 +2550,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, sp.values(ind),
                         rid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetRid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2565,7 +2566,7 @@ case class JoinIndexExecution(left: SparkPlan,
                 val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, mat1(i, j),
                   rid2, mat2, blkSize, mergeFunc)
                 if (join._1) {
-                  val insert = ((offsetRid, rid2, cid2), join._2)
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                   joinRes += insert
                 }
               }
@@ -2577,7 +2578,7 @@ case class JoinIndexExecution(left: SparkPlan,
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
           val offsetD1: Long = rid1 * blkSize
           val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Int, Int), MLMatrix)]()
+          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2590,7 +2591,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, den(i, j),
                         cid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetRid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2607,7 +2608,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, sp.values(ind),
                         cid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetRid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2622,7 +2623,7 @@ case class JoinIndexExecution(left: SparkPlan,
                       val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, sp.values(ind),
                         cid2, mat2, blkSize, mergeFunc)
                       if (join._1) {
-                        val insert = ((offsetRid, rid2, cid2), join._2)
+                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                         joinRes += insert
                       }
                     }
@@ -2638,7 +2639,7 @@ case class JoinIndexExecution(left: SparkPlan,
                 val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, mat1(i, j),
                   cid2, mat2, blkSize, mergeFunc)
                 if (join._1) {
-                  val insert = ((offsetRid, rid2, cid2), join._2)
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                   joinRes += insert
                 }
               }
@@ -2650,14 +2651,16 @@ case class JoinIndexExecution(left: SparkPlan,
     }
     joinRdd.map { elem =>
       val d1 = elem._1._1
-      val b2 = elem._1._2
-      val b3 = elem._1._3
+      val d2 = elem._1._2
+      val b2 = elem._1._3
+      val b3 = elem._1._4
       val matrix = elem._2
-      val res = new GenericInternalRow(4)
+      val res = new GenericInternalRow(5)
       res.setLong(0, d1)
-      res.setInt(1, b2)
-      res.setInt(2, b3)
-      res.update(3, MLMatrixSerializer.serialize(matrix))
+      res.setLong(1, d2)
+      res.setInt(2, b2)
+      res.setInt(3, b3)
+      res.update(4, MLMatrixSerializer.serialize(matrix))
       res
     }
   }

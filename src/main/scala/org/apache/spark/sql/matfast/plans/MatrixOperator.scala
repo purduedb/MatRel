@@ -396,8 +396,10 @@ case class JoinIndexOperator(leftChild: LogicalPlan,
                              mergeFunc: (Double, Double) => Double,
                              blkSize: Int) extends BinaryNode {
 
+  // add one more index for debugging purpose
   lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)))
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
 
   override def output: Seq[Attribute] = dim ++ rightChild.output
 

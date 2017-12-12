@@ -1323,7 +1323,9 @@ object LocalMatrix {
                              udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
     val offsetD1: Long = rid * blkSize
     // At most one row of B is matched with the cell
-    if (cell < offsetD1 + 1 || cell > offsetD1 + mat.numRows) {
+    if (idx < 0 && (cell < offsetD1 + 1 || cell > offsetD1 + mat.numRows)) {
+      (false, null)
+    } else if (idx > 0 && (idx < offsetD1 + 1 || idx > offsetD1 + mat.numRows)) {
       (false, null)
     } else {
       val rand = new scala.util.Random()
@@ -1351,6 +1353,7 @@ object LocalMatrix {
             if (!sp.isTransposed) { // CSC format
               val matchValues = ArrayBuffer.empty[Double]
               val matchRowIndices = ArrayBuffer.empty[Int]
+              val matchColCapacity = Array.fill[Int](sp.colPtrs.length)(0)
               val matchColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
               for (j <- 0 until sp.numCols) {
                 for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
@@ -1360,26 +1363,27 @@ object LocalMatrix {
                     if (math.abs(cell - offsetD1 - rowInd - 1) < 1e-6) {
                       matchRowIndices += rowInd
                       matchValues += udf(cell, sp.values(ind))
-                      matchColPtrs(j) += 1
+                      matchColCapacity(j) += 1
                     }
                   } else {
                     if (math.abs(idx - offsetD1 - rowInd - 1) < 1e-6) {
                       matchRowIndices += rowInd
                       matchValues += udf(cell, sp.values(ind))
-                      matchColPtrs(j) += 1
+                      matchColCapacity(j) += 1
                     }
                   }
                 }
               }
               for (j <- 1 until matchColPtrs.length) {
-                matchColPtrs(j) += matchColPtrs(j - 1)
+                matchColPtrs(j) = matchColPtrs(j - 1) + matchColCapacity(j - 1)
               }
-              matchColPtrs(matchColPtrs.length - 1) = matchValues.length
+              // matchColPtrs(matchColPtrs.length - 1) = matchValues.length
               (true, new SparseMatrix(sp.numRows, sp.numCols,
                 matchColPtrs, matchRowIndices.toArray, matchValues.toArray, sp.isTransposed))
             } else { // CSR format
               val matchValues = ArrayBuffer.empty[Double]
               val matchColIndices = ArrayBuffer.empty[Int]
+              val matchRowCapacity = Array.fill[Int](sp.colPtrs.length)(0)
               val matchRowPtrs = Array.fill[Int](sp.colPtrs.length)(0)
               for (i <- 0 until sp.numRows) {
                 if (idx < 0) {
@@ -1388,7 +1392,7 @@ object LocalMatrix {
                       val ind = sp.colPtrs(i) + k
                       matchColIndices += sp.rowIndices(ind)
                       matchValues += udf(cell, sp.values(ind))
-                      matchRowPtrs(i) += 1
+                      matchRowCapacity(i) += 1
                     }
                   }
                 } else {
@@ -1397,15 +1401,15 @@ object LocalMatrix {
                       val ind = sp.colPtrs(i) + k
                       matchColIndices += sp.rowIndices(ind)
                       matchValues += udf(cell, sp.values(ind))
-                      matchRowPtrs(i) += 1
+                      matchRowCapacity(i) += 1
                     }
                   }
                 }
               }
               for (i <- 1 until matchRowPtrs.length) {
-                matchRowPtrs(i) += matchRowPtrs(i - 1)
+                matchRowPtrs(i) = matchRowPtrs(i - 1) + matchRowCapacity(i - 1)
               }
-              matchRowPtrs(matchRowPtrs.length - 1) = matchValues.length
+              // matchRowPtrs(matchRowPtrs.length - 1) = matchValues.length
               (true, new SparseMatrix(sp.numRows, sp.numCols,
                 matchRowPtrs, matchColIndices.toArray, matchValues.toArray, sp.isTransposed))
             }
@@ -1438,7 +1442,9 @@ object LocalMatrix {
                              udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
     val offsetD2: Long = cid * blkSize
     // At most one column of B is matched with the cell
-    if (cell < offsetD2 + 1 || cell > offsetD2 + mat.numCols) {
+    if (idx < 0 && (cell < offsetD2 + 1 || cell > offsetD2 + mat.numCols)) {
+      (false, null)
+    } else if (idx > 0 && (idx < offsetD2 + 1 || idx > offsetD2 + mat.numCols)) {
       (false, null)
     } else {
       val rand = new scala.util.Random()
@@ -1466,6 +1472,7 @@ object LocalMatrix {
             if (!sp.isTransposed) { // CSC format
               val matchValues = ArrayBuffer.empty[Double]
               val matchRowIndices = ArrayBuffer.empty[Int]
+              val matchColCapacity = Array.fill[Int](sp.colPtrs.length)(0)
               val matchColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
               for (j <- 0 until sp.numCols) {
                 if (idx < 0) {
@@ -1474,7 +1481,7 @@ object LocalMatrix {
                       val ind = sp.colPtrs(j) + k
                       matchRowIndices += sp.rowIndices(ind)
                       matchValues += udf(cell, sp.values(ind))
-                      matchColPtrs(j) += 1
+                      matchColCapacity(j) += 1
                     }
                   }
                 } else {
@@ -1483,20 +1490,21 @@ object LocalMatrix {
                       val ind = sp.colPtrs(j) + k
                       matchRowIndices += sp.rowIndices(ind)
                       matchValues += udf(cell, sp.values(ind))
-                      matchColPtrs(j) += 1
+                      matchColCapacity(j) += 1
                     }
                   }
                 }
               }
               for (j <- 1 until matchColPtrs.length) {
-                matchColPtrs(j) += matchColPtrs(j - 1)
+                matchColPtrs(j) = matchColPtrs(j - 1) + matchColCapacity(j - 1)
               }
-              matchColPtrs(matchColPtrs.length - 1) = matchValues.length
+              // matchColPtrs(matchColPtrs.length - 1) = matchValues.length
               (true, new SparseMatrix(sp.numRows, sp.numCols,
                 matchColPtrs, matchRowIndices.toArray, matchValues.toArray, sp.isTransposed))
             } else { // CSR format
               val matchValues = ArrayBuffer.empty[Double]
               val matchColIndices = ArrayBuffer.empty[Int]
+              val matchRowCapacity = Array.fill[Int](sp.colPtrs.length)(0)
               val matchRowPtrs = Array.fill[Int](sp.colPtrs.length)(0)
               for (i <- 0 until sp.numRows) {
                 for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
@@ -1506,21 +1514,21 @@ object LocalMatrix {
                     if (math.abs(cell - offsetD2 - colInd - 1) < 1e-6) {
                       matchColIndices += colInd
                       matchValues += udf(cell, sp.values(ind))
-                      matchRowPtrs(i) += 1
+                      matchRowCapacity(i) += 1
                     }
                   } else {
                     if (math.abs(idx - offsetD2 - colInd - 1) < 1e-6) {
                       matchColIndices += colInd
                       matchValues += udf(cell, sp.values(ind))
-                      matchRowPtrs(i) += 1
+                      matchRowCapacity(i) += 1
                     }
                   }
                 }
               }
               for (i <- 1 until matchRowPtrs.length) {
-                matchRowPtrs(i) += matchRowPtrs(i - 1)
+                matchRowPtrs(i) = matchRowPtrs(i - 1) + matchRowCapacity(i - 1)
               }
-              matchRowPtrs(matchRowPtrs.length - 1) = matchValues.length
+              // matchRowPtrs(matchRowPtrs.length - 1) = matchValues.length
               (true, new SparseMatrix(sp.numRows, sp.numCols,
                 matchRowPtrs, matchColIndices.toArray, matchValues.toArray, sp.isTransposed))
             }

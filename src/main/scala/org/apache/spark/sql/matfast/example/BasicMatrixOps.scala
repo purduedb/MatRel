@@ -462,6 +462,7 @@ object BasicMatrixOps {
     val b4 = new DenseMatrix(2, 2, Array[Double](4, 5, 6, 7))
     val s1 = new SparseMatrix(2, 2, Array[Int](0, 1, 2),
       Array[Int](1, 0), Array[Double](4, 2))
+
     val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
     val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
     mat1.joinOnSingleIndex(4, 4, mat2, 4, 4, 1,

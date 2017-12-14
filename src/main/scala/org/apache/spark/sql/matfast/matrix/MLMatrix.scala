@@ -752,7 +752,8 @@ case class SparseMatrix @Since("1.3.0")(
   }
 
   override def bloomFilter: BloomFilter[Double] = {
-    val bloom: BloomFilter[Double] = new FilterBuilder(1000000, 0.1).buildBloomFilter()
+    val bloom: BloomFilter[Double] = new FilterBuilder().
+      expectedElements(1000000).hashFunction(HashMethod.Murmur3).buildBloomFilter()
     for (x <- values) {
       bloom.add(x)
     }

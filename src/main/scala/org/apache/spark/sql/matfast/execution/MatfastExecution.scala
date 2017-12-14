@@ -1891,12 +1891,12 @@ case class JoinOnValuesExecution(left: SparkPlan,
         if (math.abs(udf(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
           mat1 match {
             case den: DenseMatrix =>
-              for (i <- 0 until mat1.numRows) {
-                for (j <- 0 until mat1.numCols) {
-                  if (math.abs(mat1(i, j) - 0.0) > 1e-6) {
+              for (i <- 0 until den.numRows) {
+                for (j <- 0 until den.numCols) {
+                  if (math.abs(den(i, j) - 0.0) > 1e-6) {
                     val offsetRid = offsetD1 + i
                     val offsetCid = offsetD2 + j
-                    val join = LocalMatrix.UDF_Element_Match(-1, mat1(i, j), mat2, udf)
+                    val join = LocalMatrix.UDF_Element_Match(-1, den(i, j), mat2, udf)
                     if (join._1) {
                       val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                       joinRes += insert

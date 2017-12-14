@@ -49,12 +49,12 @@ object LocalMatrix {
 
   def compute(a: MLMatrix, b: MLMatrix, f: (Double, Double) => Double): MLMatrix = {
     if (a != null && b != null) {
-      require(a.numRows == b.numRows,
+      /*require(a.numRows == b.numRows,
         s"Matrix A and B must have the same number of rows. But found " +
           s"A.numRows = ${a.numRows}, B.numRows = ${b.numRows}")
       require(a.numCols == b.numCols,
         s"Matrix A and B must have the same number of cols. But found " +
-          s"A.numCols = ${a.numCols}, B.numCols = ${b.numCols}")
+          s"A.numCols = ${a.numCols}, B.numCols = ${b.numCols}")*/
       (a, b) match { // Notice, the size of a and b may be different!!!
         case (ma: DenseMatrix, mb: DenseMatrix) => computeDense(ma, mb, f)
         case (ma: DenseMatrix, mb: SparseMatrix) => computeDenseSparse(ma, mb, f)
@@ -1232,75 +1232,97 @@ object LocalMatrix {
     if (math.abs(udf(rand.nextDouble(), 0.0) - 0.0) < 1e-6) {
       mat match {
         case den: DenseMatrix =>
-          val filteredValues = Array.fill[Double](den.values.length)(0.0)
-          var nnz = 0
-          for (i <- 0 until den.values.length) {
-            if (ind < 0) { // match values
-              if (math.abs(cell - den.values(i)) < 1e-6) {
-                filteredValues(i) = udf(cell, den.values(i))
-                nnz += 1
-              }
-            } else { // match indices
-              if (math.abs(ind - den.values(i)) < 1e-6) {
-                filteredValues(i) = udf(cell, den.values(i))
-                nnz += 1
+          val bloom = den.bloomFilter
+          // bloom filter to skip the given mat
+          if (ind < 0 && !bloom.contains(cell)) {
+            (false, null)
+          } else if (ind > 0 && !bloom.contains(ind)) {
+            (false, null)
+          } else {
+            val filteredValues = Array.fill[Double](den.values.length)(0.0)
+            var nnz = 0
+            for (i <- 0 until den.values.length) {
+              if (ind < 0) { // match values
+                if (math.abs(cell - den.values(i)) < 1e-6) {
+                  filteredValues(i) = udf(cell, den.values(i))
+                  nnz += 1
+                }
+              } else { // match indices
+                if (math.abs(ind - den.values(i)) < 1e-6) {
+                  filteredValues(i) = udf(cell, den.values(i))
+                  nnz += 1
+                }
               }
             }
-          }
-          if (nnz == 0) {
-            (false, null)
-          } else if (nnz > 0.5 * den.numRows * den.numCols) {
-            (true, new DenseMatrix(den.numRows, den.numCols, filteredValues, den.isTransposed))
-          } else {
-            (true, new DenseMatrix(den.numRows, den.numCols,
-              filteredValues, den.isTransposed).toSparse)
+            if (nnz == 0) {
+              (false, null)
+            } else if (nnz > 0.5 * den.numRows * den.numCols) {
+              (true, new DenseMatrix(den.numRows, den.numCols, filteredValues, den.isTransposed))
+            } else {
+              (true, new DenseMatrix(den.numRows, den.numCols,
+                filteredValues, den.isTransposed).toSparse)
+            }
           }
         case sp: SparseMatrix =>
-          val filteredValues = ArrayBuffer.empty[Double]
-          val filteredRowIndices = ArrayBuffer.empty[Int]
-          val filteredColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
-          var total = 0
-          for (i <- 0 until sp.values.length) {
-            if (ind < 0) {
-              if (Math.abs(cell - sp.values(i)) <= 1e-6) {
-                total += 1
-                filteredValues += udf(cell, sp.values(i))
-                filteredRowIndices += sp.rowIndices(i)
-                for (j <- 1 until filteredColPtrs.length) {
-                  breakable {
-                    if (i >= sp.colPtrs(j - 1) && i < sp.colPtrs(j)) {
-                      filteredColPtrs(j) += 1
-                      break
+          val bloom = sp.bloomFilter
+          if (ind < 0 && !bloom.contains(cell)) {
+            (false, null)
+          } else if (ind > 0 && !bloom.contains(ind)) {
+            (false, null)
+          } else {
+            val filteredValues = ArrayBuffer.empty[Double]
+            val filteredRowIndices = ArrayBuffer.empty[Int]
+            val filteredColPtrs = Array.fill[Int](sp.colPtrs.length)(0)
+            var total = 0
+            for (i <- 0 until sp.values.length) {
+              if (ind < 0) {
+                if (Math.abs(cell - sp.values(i)) <= 1e-6) {
+                  total += 1
+                  filteredValues += udf(cell, sp.values(i))
+                  filteredRowIndices += sp.rowIndices(i)
+                  for (j <- 1 until filteredColPtrs.length) {
+                    breakable {
+                      if (i >= sp.colPtrs(j - 1) && i < sp.colPtrs(j)) {
+                        filteredColPtrs(j) += 1
+                        break
+                      }
                     }
                   }
                 }
-              }
-            } else {
-              if (Math.abs(ind - sp.values(i)) <= 1e-6) {
-                total += 1
-                filteredValues += udf(cell, sp.values(i))
-                filteredRowIndices += sp.rowIndices(i)
-                for (j <- 1 until filteredColPtrs.length) {
-                  breakable {
-                    if (i >= sp.colPtrs(j - 1) && i < sp.colPtrs(j)) {
-                      filteredColPtrs(j) += 1
-                      break
+              } else {
+                if (Math.abs(ind - sp.values(i)) <= 1e-6) {
+                  total += 1
+                  filteredValues += udf(cell, sp.values(i))
+                  filteredRowIndices += sp.rowIndices(i)
+                  for (j <- 1 until filteredColPtrs.length) {
+                    breakable {
+                      if (i >= sp.colPtrs(j - 1) && i < sp.colPtrs(j)) {
+                        filteredColPtrs(j) += 1
+                        break
+                      }
                     }
                   }
                 }
               }
             }
+            filteredColPtrs(sp.colPtrs.length - 1) = total
+            for (k <- 1 until filteredColPtrs.length - 1) {
+              filteredColPtrs(k) += filteredColPtrs(k - 1)
+            }
+            (true, new SparseMatrix(sp.numRows, sp.numCols, filteredColPtrs,
+              filteredRowIndices.toArray, filteredValues.toArray, sp.isTransposed))
           }
-          filteredColPtrs(sp.colPtrs.length - 1) = total
-          for (k <- 1 until filteredColPtrs.length - 1) {
-            filteredColPtrs(k) += filteredColPtrs(k - 1)
-          }
-          (true, new SparseMatrix(sp.numRows, sp.numCols, filteredColPtrs,
-            filteredRowIndices.toArray, filteredValues.toArray, sp.isTransposed))
         case _ => throw new SparkException("Illegal matrix type")
       }
     } else {
-      match_matrix_cells(ind, cell, mat, udf)
+      val bloom = mat.bloomFilter
+      if (ind < 0 && !bloom.contains(cell)) {
+        (false, null)
+      } else if (ind > 0 && !bloom.contains(ind)) {
+        (false, null)
+      } else {
+        match_matrix_cells(ind, cell, mat, udf)
+      }
     }
   }
 

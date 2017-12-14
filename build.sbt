@@ -12,6 +12,10 @@ libraryDependencies += "org.apache.spark" %% "spark-catalyst" % "2.1.0" // % "pr
 
 libraryDependencies += "org.apache.spark" %% "spark-mllib" % "2.1.0" // % "provided"
 
+libraryDependencies += "com.baqend" % "bloom-filter" % "1.0.7"
+
+resolvers += "bintray" at "http://jcenter.bintray.com"
+
 assemblyMergeStrategy in assembly := {
   case PathList("org", "aopalliance", xs @ _*) => MergeStrategy.last
   case PathList("javax", "inject", xs @ _*) => MergeStrategy.last

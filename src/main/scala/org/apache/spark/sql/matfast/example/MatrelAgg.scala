@@ -38,8 +38,8 @@ object MatrelAgg {
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.shuffle.consolidateFiles", "true")
       .config("spark.shuffle.compress", "false")
-      .config("spark.executor.cores", "10")
-      .config("spark.cores.max", "50")
+      .config("spark.executor.cores", "16")
+      .config("spark.cores.max", "80")
       .config("spark.executor.memory", "24g")
       .config("spark.default.parallelism", "200")
       .config("spark.rpc.message.maxSize", "1000")
@@ -58,10 +58,10 @@ object MatrelAgg {
     val (dim, matrixRDD) = getBlockMatrixRDD(spark, graphname)
     val matrix = matrixRDD.toDS()
     import spark.MatfastImplicits._
-    //matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000).rowSum(dim, dim).rdd.saveAsTextFile(savePath)
-    val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
-    GG.rdd.count()
-    GG.rowSum(dim, dim).rdd.saveAsTextFile(savePath)
+    matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000).rowSum(dim, dim).rdd.saveAsTextFile(savePath)
+    //val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000)
+    //GG.rdd.count()
+    //GG.trace(dim, dim).rdd.saveAsTextFile(savePath)
   }
 
   def getBlockMatrixRDD(spark: MatfastSession, graphname: String): (Long, RDD[MatrixBlock]) = {

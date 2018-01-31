@@ -36,7 +36,7 @@ object DenseMLlib {
       .set("spark.shuffle.compress", "false")
       .set("spark.executor.cores", "10")
       .set("spark.cores.max", "50")
-      .set("spark.executor.memory", "30g")
+      .set("spark.executor.memory", "24g")
       .set("spark.default.parallelism", "300")
       .set("spark.rpc.message.maxSize", "1600")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)

@@ -1485,24 +1485,28 @@ case class MatrixElementAddExecution(left: SparkPlan,
       s"leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
     require(leftColNum == rightColNum, s"Col number not match, " +
       s"leftColNum = $leftColNum, rightColNum = $rightColNum")
-    val rdd1 = left.execute()
-    val rdd2 = right.execute()
-    if (rdd1.partitioner != None) {
-      val part = rdd1.partitioner.get
-      MatfastExecutionHelper.addWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
-    } else if (rdd2.partitioner != None) {
-      val part = rdd2.partitioner.get
-      MatfastExecutionHelper.addWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+    if (left.children == right.children) {
+      MatfastExecutionHelper.selfElementAdd(left.execute())
     } else {
-      val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
-      val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
-      MatfastExecutionHelper.addWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      val rdd1 = left.execute()
+      val rdd2 = right.execute()
+      if (rdd1.partitioner != None) {
+        val part = rdd1.partitioner.get
+        MatfastExecutionHelper.addWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      } else if (rdd2.partitioner != None) {
+        val part = rdd2.partitioner.get
+        MatfastExecutionHelper.addWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      } else {
+        val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
+        val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
+        MatfastExecutionHelper.addWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      }
     }
   }
 }
@@ -1524,24 +1528,28 @@ case class MatrixElementMultiplyExecution(left: SparkPlan,
       s"leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
     require(leftColNum == rightColNum, s"Col number not match, " +
       s"leftColNum = $leftColNum, rightColNum = $rightColNum")
-    val rdd1 = left.execute()
-    val rdd2 = right.execute()
-    if (rdd1.partitioner != None) {
-      val part = rdd1.partitioner.get
-      MatfastExecutionHelper.multiplyWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
-    } else if (rdd2.partitioner != None) {
-      val part = rdd2.partitioner.get
-      MatfastExecutionHelper.multiplyWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+    if (left.children == right.children) {
+      MatfastExecutionHelper.selfElementMultiply(left.execute())
     } else {
-      val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
-      val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
-      MatfastExecutionHelper.multiplyWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      val rdd1 = left.execute()
+      val rdd2 = right.execute()
+      if (rdd1.partitioner != None) {
+        val part = rdd1.partitioner.get
+        MatfastExecutionHelper.multiplyWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      } else if (rdd2.partitioner != None) {
+        val part = rdd2.partitioner.get
+        MatfastExecutionHelper.multiplyWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      } else {
+        val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
+        val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
+        MatfastExecutionHelper.multiplyWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      }
     }
   }
 }
@@ -1563,24 +1571,28 @@ case class MatrixElementDivideExecution(left: SparkPlan,
       s"leftRowNum = $leftRowNum, rightRowNum = $rightRowNum")
     require(leftColNum == rightColNum, s"Col number not match, " +
       s"leftColNum = $leftColNum, rightColNum = $rightColNum")
-    val rdd1 = left.execute()
-    val rdd2 = right.execute()
-    if (rdd1.partitioner != None) {
-      val part = rdd1.partitioner.get
-      MatfastExecutionHelper.divideWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
-    } else if (rdd2.partitioner != None) {
-      val part = rdd2.partitioner.get
-      MatfastExecutionHelper.divideWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+    if (left.children == right.children) {
+      MatfastExecutionHelper.selfElementDivide(left.execute())
     } else {
-      val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
-      val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
-      MatfastExecutionHelper.divideWithPartitioner(
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
-        MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      val rdd1 = left.execute()
+      val rdd2 = right.execute()
+      if (rdd1.partitioner != None) {
+        val part = rdd1.partitioner.get
+        MatfastExecutionHelper.divideWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      } else if (rdd2.partitioner != None) {
+        val part = rdd2.partitioner.get
+        MatfastExecutionHelper.divideWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      } else {
+        val params = MatfastExecutionHelper.genBlockCyclicPartitioner(leftRowNum, leftColNum, blkSize)
+        val part = new BlockCyclicPartitioner(params._1, params._2, params._3, params._4)
+        MatfastExecutionHelper.divideWithPartitioner(
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd1),
+          MatfastExecutionHelper.repartitionWithTargetPartitioner(part, rdd2))
+      }
     }
   }
 }

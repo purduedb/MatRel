@@ -164,7 +164,11 @@ object MatrixOperators extends Strategy {
         case _ =>
           SelectDirectExecution(planLater(child), blkSize, rowIdx, colIdx) :: Nil
       }
-    case TransposeOperator(child) => MatrixTransposeExecution(planLater(child)) :: Nil
+    case TransposeOperator(child) =>
+      child match {
+        case TransposeOperator(gchild) => planLater(gchild) :: Nil
+        case _ => MatrixTransposeExecution(planLater(child)) :: Nil
+      }
     case RowSumOperator(child, nrows, ncols) => child match {
       case TransposeOperator(beforeTrans) =>
         MatrixTransposeExecution(planLater(ColumnSumOperator(beforeTrans, ncols, nrows))) :: Nil

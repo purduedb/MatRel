@@ -585,4 +585,69 @@ object MatfastExecutionHelper {
     }
   }
 
+  def selfElementMultiply(rdd: RDD[InternalRow]): RDD[InternalRow] = {
+    rdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val mat = matrix match {
+        case den: DenseMatrix =>
+          val arr = den.values.map(x => x*x)
+          new DenseMatrix(den.numRows, den.numCols, arr, den.isTransposed)
+        case sp: SparseMatrix =>
+          val arr = sp.values.map(x => x*x)
+          new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
+        case _ => throw new SparkException("Not supported matrix type")
+      }
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(mat))
+      res
+    }
+  }
+
+  def selfElementAdd(rdd: RDD[InternalRow]): RDD[InternalRow] = {
+    rdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val mat = matrix match {
+        case den: DenseMatrix =>
+          val arr = den.values.map(x => 2*x)
+          new DenseMatrix(den.numRows, den.numCols, arr, den.isTransposed)
+        case sp: SparseMatrix =>
+          val arr = sp.values.map(x => x*x)
+          new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
+        case _ => throw new SparkException("Not supported matrix type")
+      }
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(mat))
+      res
+    }
+  }
+
+  def selfElementDivide(rdd: RDD[InternalRow]): RDD[InternalRow] = {
+    rdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val mat = matrix match {
+        case den: DenseMatrix =>
+          val arr = den.values.map(_ => 1.0)
+          new DenseMatrix(den.numRows, den.numCols, arr, den.isTransposed)
+        case sp: SparseMatrix =>
+          val arr = sp.values.map(x => x*x)
+          new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, arr, sp.isTransposed)
+        case _ => throw new SparkException("Not supported matrix type")
+      }
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(mat))
+      res
+    }
+  }
 }

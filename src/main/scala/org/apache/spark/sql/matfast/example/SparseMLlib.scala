@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.matfast.example
 
+import org.apache.spark.mllib.linalg.DenseMatrix
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
@@ -34,8 +35,8 @@ object SparseMLlib {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.executor.cores", "10")
-      .set("spark.cores.max", "50")
+      .set("spark.executor.cores", "16")
+      .set("spark.cores.max", "80")
       .set("spark.executor.memory", "30g")
       .set("spark.default.parallelism", "300")
       .set("spark.rpc.message.maxSize", "1600")
@@ -49,7 +50,20 @@ object SparseMLlib {
     val gram_matrix = G.transpose.multiply(G)
     val vecRDD = sc.parallelize(0 until gram_matrix.numCols().toInt).map(x => MatrixEntry(x.toLong, 0, 1.0))
     val e = new CoordinateMatrix(vecRDD, dim, 1L).toBlockMatrix(blkSize, blkSize)
-    gram_matrix.multiply(e).blocks.saveAsTextFile(hdfs + "tmp_result/aggregation")
+    //gram_matrix.multiply(e).blocks.saveAsTextFile(hdfs + "tmp_result/aggregation")
+    gram_matrix.blocks
+      .map { case ((rid, cid), mat) =>
+        if (rid != cid) {
+          0.0
+        } else {
+          val nrows = mat.numRows
+          var diag = 0.0
+          for (i <- 0 until nrows) {
+            diag += mat(i, i)
+          }
+          diag
+        }
+      }.reduce(_ + _)
     Thread.sleep(10000)
   }
 

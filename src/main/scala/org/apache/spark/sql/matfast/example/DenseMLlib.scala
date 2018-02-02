@@ -19,7 +19,8 @@ package org.apache.spark.sql.matfast.example
 
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.mllib.linalg.DenseVector
-import org.apache.spark.mllib.linalg.distributed.{IndexedRow, IndexedRowMatrix, MatrixEntry, CoordinateMatrix}
+import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, IndexedRow, IndexedRowMatrix, MatrixEntry, RowMatrix}
+import org.apache.spark.mllib.linalg.Vector
 
 object DenseMLlib {
   def main(args: Array[String]): Unit = {
@@ -30,25 +31,40 @@ object DenseMLlib {
     val hdfs = "hdfs://172.18.11.128:8020/user/yu163/"
     val graphName = hdfs + "dataset/" + args(0)
     val conf = new SparkConf()
-      .setAppName("Aggregation on sparse graphs")
+      .setAppName("Aggregation on dense graphs")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.shuffle.consolidateFiles", "true")
       .set("spark.shuffle.compress", "false")
-      .set("spark.executor.cores", "10")
-      .set("spark.cores.max", "50")
+      .set("spark.executor.cores", "16")
+      .set("spark.cores.max", "80")
       .set("spark.executor.memory", "24g")
       .set("spark.default.parallelism", "300")
       .set("spark.rpc.message.maxSize", "1600")
+      .set("spark.kryoserializer.buffer.max", "256m")
     conf.setJars(SparkContext.jarOfClass(this.getClass).toArray)
     val sc = new SparkContext(conf)
-    val idxRowMatrix = genIndexedRowMatrix(sc, graphName)
-    val dim = idxRowMatrix.numRows()
     val blkSize = 1000
-    val mat = idxRowMatrix.toBlockMatrix(blkSize, blkSize)
-    val gram_matrix = mat.transpose.multiply(mat)
-    val vecRDD = sc.parallelize(0 until gram_matrix.numCols().toInt).map(x => MatrixEntry(x.toLong, 0, 1.0))
-    val e = new CoordinateMatrix(vecRDD, dim, 1L).toBlockMatrix(blkSize, blkSize)
-    gram_matrix.multiply(e).blocks.saveAsTextFile(hdfs + "tmp_result/aggregation")
+    val matrix = genIndexedRowMatrix(sc, graphName).toBlockMatrix(blkSize, blkSize)
+    val dim = matrix.numCols()
+    println(s"dim = $dim")
+    val gram_matrix = matrix.transpose.multiply(matrix)
+    //val vecRDD = sc.parallelize(0 until gram_matrix.numCols().toInt).map(x => MatrixEntry(x.toLong, 0, 1.0))
+    //val e = new CoordinateMatrix(vecRDD, dim, 1L).toBlockMatrix(blkSize, blkSize)
+    //gram_matrix.multiply(e).blocks.saveAsTextFile(hdfs + "tmp_result/aggregation")
+    val trace = gram_matrix.blocks
+      .map { case ((rid, cid), mat) =>
+        if (rid != cid) {
+          0.0
+        } else {
+          val nrows = mat.numRows
+          var diag = 0.0
+          for (i <- 0 until nrows) {
+            diag += mat(i, i)
+          }
+          diag
+        }
+      }.reduce(_ + _)
+    println(s"trace = $trace")
     Thread.sleep(10000)
   }
 
@@ -65,5 +81,18 @@ object DenseMLlib {
     }
     val idxRowMat = new IndexedRowMatrix(rdd)
     idxRowMat
+  }
+
+  def getRowMatrix(sc: SparkContext, graphName: String): RowMatrix = {
+    val lines = sc.textFile(graphName, 8)
+    val rdd = lines.map { s =>
+      val line = s.trim().split(",")
+      val arr = new Array[Double](line.length)
+      for (i <- 0 until arr.length) {
+        arr(i) = line(i).toDouble
+      }
+      (new DenseVector(arr)).asInstanceOf[Vector]
+    }
+    new RowMatrix(rdd)
   }
 }

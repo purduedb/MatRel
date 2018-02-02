@@ -32,7 +32,7 @@ object MatrelAggDense {
     val graphName = hdfs + "dataset/" + args(0)
     val savePath = hdfs + "result/"
     val matfastSession = MatfastSession.builder()
-      .appName("Matrel agg on mat-mat multiply")
+      .appName("Matrel agg on mat-mat multiply dense")
       .master("spark://172.18.11.128:7077")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.shuffle.consolidateFiles", "true")
@@ -57,10 +57,10 @@ object MatrelAggDense {
     val (dim, matrixRDD) = getBlockMatrixRDD(spark, graphname)
     val matrix = matrixRDD.toDS()
     import spark.MatfastImplicits._
-    matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000).rowSum(dim, dim).rdd.saveAsTextFile(savePath)
-    //val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
-    //GG.rdd.saveAsTextFile(savePath)
-    //GG.rowSum(dim, dim).rdd.saveAsTextFile(savePath)
+    matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000).trace(dim, dim).rdd.saveAsTextFile(savePath)
+    //val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000)
+    //GG.rdd.count()
+    //GG.trace(dim, dim).rdd.saveAsTextFile(savePath)
   }
 
   def getBlockMatrixRDD(spark: MatfastSession, graphname: String): (Long, RDD[MatrixBlock]) = {

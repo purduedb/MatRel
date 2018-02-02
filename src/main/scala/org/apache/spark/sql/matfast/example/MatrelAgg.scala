@@ -58,8 +58,8 @@ object MatrelAgg {
     val (dim, matrixRDD) = getBlockMatrixRDD(spark, graphname)
     val matrix = matrixRDD.toDS()
     import spark.MatfastImplicits._
-    matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000).rowSum(dim, dim).rdd.saveAsTextFile(savePath)
-    //val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000)
+    matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000).trace(dim, dim).rdd.saveAsTextFile(savePath)
+    //val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
     //GG.rdd.count()
     //GG.trace(dim, dim).rdd.saveAsTextFile(savePath)
   }

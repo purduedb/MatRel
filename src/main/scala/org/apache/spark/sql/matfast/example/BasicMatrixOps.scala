@@ -31,7 +31,7 @@ object BasicMatrixOps {
     // runMatrixTranspose(matfastSession)
     // runMatrixScalar(matfastSession)
     // runMatrixElement(matfastSession)
-    // runMatrixMultiplication(matfastSession)
+     runMatrixMultiplication(matfastSession)
     // runMatrixAggregation(matfastSession)
     // runMatrixProjection(matfastSession)
     // runMatrixProjectCell(matfastSession)
@@ -43,7 +43,7 @@ object BasicMatrixOps {
     // runMatrixCrossProduct(matfastSession)
     // runMatrixJoinOnValues(matfastSession)
     // runMatrixJoinIndexValue(matfastSession)
-    runMatrixJoinOnSingleIndex(matfastSession)
+    // runMatrixJoinOnSingleIndex(matfastSession)
     matfastSession.stop()
   }
 

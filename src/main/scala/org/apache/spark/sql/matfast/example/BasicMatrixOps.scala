@@ -31,9 +31,9 @@ object BasicMatrixOps {
     // runMatrixTranspose(matfastSession)
     // runMatrixScalar(matfastSession)
     // runMatrixElement(matfastSession)
-     runMatrixMultiplication(matfastSession)
+    // runMatrixMultiplication(matfastSession)
     // runMatrixAggregation(matfastSession)
-    // runMatrixProjection(matfastSession)
+     runMatrixProjection(matfastSession)
     // runMatrixProjectCell(matfastSession)
     // runMatrixSelectValue(matfastSession)
     // runMatrixCount(matfastSession)
@@ -202,7 +202,7 @@ object BasicMatrixOps {
 
     import spark.MatfastImplicits._
 
-    val mat1_proj_row = mat1.projectRow(4, 4, 2, 3)
+    val mat1_proj_row = mat1.t().projectRow(4, 4, 2, 3)
     mat1_proj_row.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
@@ -210,7 +210,7 @@ object BasicMatrixOps {
       // scalastyle:on
     }
 
-    val mat2_proj_col = mat2.projectColumn(4, 4, 2, 4)
+   /* val mat2_proj_col = mat2.projectColumn(4, 4, 2, 4)
     mat2_proj_col.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
@@ -224,7 +224,7 @@ object BasicMatrixOps {
       // scalastyle:off
       println(idx + ":\n" + row.get(2).asInstanceOf[MLMatrix])
       // scalastyle:on
-    }
+    }*/
   }
 
   private def runMatrixProjectCell(spark: MatfastSession): Unit = {

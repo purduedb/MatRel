@@ -45,7 +45,9 @@ object MatrixOperators extends Strategy {
       if (rowOrCol) {
         child match {
           case TransposeOperator(ch) =>
-            ProjectColumnDirectExecution(planLater(ch), blkSize, index) :: Nil
+            MatrixTransposeExecution(planLater(
+              ProjectOperator(ch, ncols, nrows, blkSize, !rowOrCol, index))) :: Nil
+            // ProjectColumnDirectExecution(planLater(ch), blkSize, index) :: Nil
           case MatrixScalarAddOperator(ch, alpha) =>
             MatrixScalarAddExecution(planLater(
               ProjectOperator(ch, nrows, ncols, blkSize, rowOrCol, index)), alpha) :: Nil
@@ -85,7 +87,9 @@ object MatrixOperators extends Strategy {
       } else {
         child match {
           case TransposeOperator(ch) =>
-            ProjectRowDirectExecution(planLater(ch), blkSize, index) :: Nil
+            MatrixTransposeExecution(planLater(
+              ProjectOperator(ch, ncols, nrows, blkSize, !rowOrCol, index))) :: Nil
+            // ProjectRowDirectExecution(planLater(ch), blkSize, index) :: Nil
           case MatrixScalarAddOperator(ch, alpha) =>
             MatrixScalarAddExecution(planLater(
               ProjectOperator(ch, nrows, ncols, blkSize, rowOrCol, index)), alpha) :: Nil
@@ -437,8 +441,28 @@ object MatrixOperators extends Strategy {
         planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
     case MatrixMatrixMultiplicationOperator(left, leftRowNum, leftColNum,
     right, rightRowNum, rightColNum, blkSize) =>
-      MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum,
-        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+      if (leftRowNum == 1L && leftColNum > 1L) {
+        right match {
+          case TransposeOperator(ch) =>
+            MatrixTransposeExecution(planLater(
+              MatrixMatrixMultiplicationOperator(ch, rightColNum, rightRowNum,
+                TransposeOperator(left), leftColNum, leftRowNum, blkSize))) :: Nil
+          case _ => MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum,
+            planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+        }
+      } else if (rightRowNum > 1L && rightColNum == 1L) {
+        left match {
+          case TransposeOperator(ch) =>
+            MatrixTransposeExecution(planLater(
+              MatrixMatrixMultiplicationOperator(TransposeOperator(right), rightColNum, rightRowNum,
+                ch, leftColNum, leftRowNum, blkSize))) :: Nil
+          case _ => MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum,
+            planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+        }
+      } else {
+        MatrixMatrixMultiplicationExecution(planLater(left), leftRowNum, leftColNum,
+          planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+      }
     case RankOneUpdateOperator(left, leftRowNum, leftColNum,
     right, rightRowNum, rightColNum, blkSize) =>
       RankOneUpdateExecution(planLater(left), leftRowNum, leftColNum,

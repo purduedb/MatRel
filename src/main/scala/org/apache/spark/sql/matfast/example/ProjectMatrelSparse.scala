@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+
 package org.apache.spark.sql.matfast.example
 
 import org.apache.spark.mllib.linalg.distributed.MatrixEntry
@@ -23,17 +24,18 @@ import org.apache.spark.sql.matfast.matrix.{CooMatrix, MatrixBlock}
 import org.apache.spark.sql.matfast.partitioner.{RowPartitioner}
 import org.apache.spark.rdd.RDD
 
-object MatrelAgg {
+object ProjectMatrelSparse {
+
   def main(args: Array[String]): Unit = {
     if (args.length < 1) {
-      println("Usage: SparseMLlib <graphName>")
+      println("Usage: ProjectMatrelSparse <graphName>")
       System.exit(1)
     }
     val hdfs = "hdfs://172.18.11.128:8020/user/yu163/"
     val graphName = hdfs + "dataset/" + args(0)
     val savePath = hdfs + "result/"
     val matfastSession = MatfastSession.builder()
-      .appName("Matrel agg on mat-mat multiply")
+      .appName("Matrel project on sparse LR")
       .master("spark://172.18.11.128:7077")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.shuffle.consolidateFiles", "true")
@@ -56,12 +58,25 @@ object MatrelAgg {
   private def runAggOnMatrixMultiply(spark: MatfastSession, graphname: String, savePath: String): Unit = {
     import spark.implicits._
     val (dim, matrixRDD) = getBlockMatrixRDD(spark, graphname)
-    val matrix = matrixRDD.toDS()
+    val matrix = matrixRDD.toDS().cache()
+    //val yRdd = spark.sparkContext.parallelize(0 until dim.toInt).map(x => MatrixEntry(x.toLong, 0, 1.0))
+    /*val y = (new CooMatrix(yRdd, dim, 1))
+      .toBlockMatrixRDD(10000)
+      .partitionBy(new RowPartitioner(100))
+      .map(x => MatrixBlock(x._1._1, x._1._2, x._2)).toDS()*/
     import spark.MatfastImplicits._
+    val z = matrix.t().rowSum(dim, dim)
+    val z2 = matrix.matrixMultiply(dim, dim, z, dim, 1, 10000)
+    matrix.t()//.projectRow(dim, 1, 10000, 1)
+      .matrixMultiply(1, dim, z2, dim, 1, 10000).rdd.saveAsTextFile(savePath)
+    /*matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
+      .matrixMultiply(dim, dim, z, dim, 1, 10000)
+      .projectRow(dim, 1, 10000, 1).rdd.saveAsTextFile(savePath)*/
     //matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000).trace(dim, dim).rdd.saveAsTextFile(savePath)
-    val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
+
+    /*val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
     GG.rdd.count()
-    GG.trace(dim, dim).rdd.saveAsTextFile(savePath)
+    GG.trace(dim, dim).rdd.saveAsTextFile(savePath)*/
   }
 
   def getBlockMatrixRDD(spark: MatfastSession, graphname: String): (Long, RDD[MatrixBlock]) = {

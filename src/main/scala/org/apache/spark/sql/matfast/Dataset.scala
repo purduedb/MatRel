@@ -270,15 +270,15 @@ class Dataset[T] private[matfast]
   }
 
   // This crossProduct() should be used with great caution, as it may blow the cluster memory.
-  def crossProduct(leftRowNum: Long, leftColNum: Long,
+  def crossProduct(leftRowNum: Long, leftColNum: Long, isLeftSpase: Boolean,
                    right: Dataset[_],
-                   rightRowNum: Long, rightColNum: Long,
+                   rightRowNum: Long, rightColNum: Long, isRightSparse: Boolean,
                    mergeFunc: (Double, Double) => Double,
                    blkSize: Int,
                    data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
   = withPlan {
-    CrossProductOperator(this.logicalPlan, leftRowNum, leftColNum,
-      right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize)
+    CrossProductOperator(this.logicalPlan, leftRowNum, leftColNum, isLeftSpase,
+      right.logicalPlan, rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize)
   }
 
   def joinOnValues(leftRowNum: Long, leftColNum: Long,

@@ -1739,15 +1739,19 @@ case class JoinTwoIndicesExecution(left: SparkPlan,
 case class CrossProductExecution(left: SparkPlan,
                                  leftRowNum: Long,
                                  leftColNum: Long,
+                                 isLeftSparse: Boolean,
                                  right: SparkPlan,
                                  rightRowNum: Long,
                                  rightColNum: Long,
+                                 isRightSparse: Boolean,
                                  mergeFunc: (Double, Double) => Double,
                                  blkSize: Int) extends MatfastPlan {
 
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(1001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(left.output(0), left.output(1))
 
   override def output: Seq[Attribute] = dim ++ right.output
 
@@ -1766,7 +1770,14 @@ case class CrossProductExecution(left: SparkPlan,
       val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
       ((rid, cid), matrix)
     }
-    computeCrossProduct(rdd1, rdd2, mergeFunc)
+    if (isLeftSparse) {
+      computeCrossProduct(rdd1, rdd2, mergeFunc)
+    } else if (isRightSparse) {
+      val swapMergeFunc = (x: Double, y: Double) => mergeFunc(y, x)
+      computeCrossProduct(rdd2, rdd1, swapMergeFunc)
+    } else {
+      computeCrossProduct(rdd1, rdd2, mergeFunc)
+    }
   }
 
   def computeCrossProduct(rdd1: RDD[((Int, Int), MLMatrix)],
@@ -1778,9 +1789,9 @@ case class CrossProductExecution(left: SparkPlan,
         // (d1, d2, b3, b4) is different than the original blk ids
         // here (d1, d2) are the first two indices of the 4d blk
         // while (b3, b4) are the blk ids
-        val offsetD1: Long = rid1 * blkSize
-        val offsetD2: Long = cid1 * blkSize
-        val joinEachFromMat1ToMat2 = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+        val offsetD1: Int = rid1 * blkSize
+        val offsetD2: Int = cid1 * blkSize
+        val joinEachFromMat1ToMat2 = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
         val rand = new scala.util.Random()
         if (math.abs(udf(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
           mat1 match {
@@ -1847,8 +1858,8 @@ case class CrossProductExecution(left: SparkPlan,
         val b4 = elem._1._4
         val matrix = elem._2
         val res = new GenericInternalRow(5)
-        res.setLong(0, d1)
-        res.setLong(1, d2)
+        res.setInt(0, d1)
+        res.setInt(1, d2)
         res.setInt(2, b3)
         res.setInt(3, b4)
         res.update(4, MLMatrixSerializer.serialize(matrix))
@@ -1866,9 +1877,11 @@ case class JoinOnValuesExecution(left: SparkPlan,
                                  mergeFunc: (Double, Double) => Double,
                                  blkSize: Int) extends MatfastPlan {
 
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(1001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(left.output(0), left.output(1))
 
   override def output: Seq[Attribute] = dim ++ right.output
 
@@ -1896,9 +1909,9 @@ case class JoinOnValuesExecution(left: SparkPlan,
                           udf: (Double, Double) => Double): RDD[InternalRow] = {
     val joinValueRdd = rdd1.cartesian(rdd2).flatMap {
       case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-        val offsetD1: Long = rid1 * blkSize
-        val offsetD2: Long = cid1 * blkSize
-        val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+        val offsetD1: Int = rid1 * blkSize
+        val offsetD2: Int = cid1 * blkSize
+        val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
         val rand = new scala.util.Random()
         if (math.abs(udf(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
           mat1 match {
@@ -1973,8 +1986,8 @@ case class JoinOnValuesExecution(left: SparkPlan,
       val b4 = elem._1._4
       val matrix = elem._2
       val res = new GenericInternalRow(5)
-      res.setLong(0, d1)
-      res.setLong(1, d2)
+      res.setInt(0, d1)
+      res.setInt(1, d2)
       res.setInt(2, b3)
       res.setInt(3, b4)
       res.update(4, MLMatrixSerializer.serialize(matrix))
@@ -1995,9 +2008,11 @@ case class JoinIndexValueExecution(left: SparkPlan,
                                    mergeFunc: (Double, Double) => Double,
                                    blkSize: Int) extends MatfastPlan {
 
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(1001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(left.output(0), left.output(1))
 
   override def output: Seq[Attribute] = dim ++ right.output
 
@@ -2021,9 +2036,9 @@ case class JoinIndexValueExecution(left: SparkPlan,
     val joinRdd = mode match {
       case 1 => // iA = vB, avoid matching with 0's, shift iA by 1
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-            val offsetD1: Long = rid1 * blkSize
-            val offsetD2: Long = cid1 * blkSize
-            val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+            val offsetD1: Int = rid1 * blkSize
+            val offsetD2: Int = cid1 * blkSize
+            val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
             val rand = new scala.util.Random()
             if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
               mat1 match {
@@ -2094,9 +2109,9 @@ case class JoinIndexValueExecution(left: SparkPlan,
         }
       case 2 => // jA = vB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Long = rid1 * blkSize
-          val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          val offsetD1: Int = rid1 * blkSize
+          val offsetD2: Int = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2167,9 +2182,9 @@ case class JoinIndexValueExecution(left: SparkPlan,
         }
       case 3 => // vA = iB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Long = rid1 * blkSize
-          val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          val offsetD1: Int = rid1 * blkSize
+          val offsetD2: Int = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           // preserving 0's on the left
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
@@ -2241,9 +2256,9 @@ case class JoinIndexValueExecution(left: SparkPlan,
         }
       case 4 => // vA = jB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Long = rid1 * blkSize
-          val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          val offsetD1: Int = rid1 * blkSize
+          val offsetD2: Int = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2321,8 +2336,8 @@ case class JoinIndexValueExecution(left: SparkPlan,
       val b4 = elem._1._4
       val matrix = elem._2
       val res = new GenericInternalRow(5)
-      res.setLong(0, d1)
-      res.setLong(1, d2)
+      res.setInt(0, d1)
+      res.setInt(1, d2)
       res.setInt(2, b3)
       res.setInt(3, b4)
       res.update(4, MLMatrixSerializer.serialize(matrix))
@@ -2343,9 +2358,11 @@ case class JoinIndexExecution(left: SparkPlan,
                               mergeFunc: (Double, Double) => Double,
                               blkSize: Int) extends MatfastPlan {
 
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(1001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(left.output(0), left.output(1))
 
   override def output: Seq[Attribute] = dim ++ right.output
 
@@ -2369,9 +2386,9 @@ case class JoinIndexExecution(left: SparkPlan,
     val joinRdd = mode match {
       case 1 => // iA = iB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Long = rid1 * blkSize
-          val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          val offsetD1: Int = rid1 * blkSize
+          val offsetD2: Int = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2442,9 +2459,9 @@ case class JoinIndexExecution(left: SparkPlan,
         }
       case 2 => // iA = jB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Long = rid1 * blkSize
-          val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          val offsetD1: Int = rid1 * blkSize
+          val offsetD2: Int = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2515,9 +2532,9 @@ case class JoinIndexExecution(left: SparkPlan,
         }
       case 3 => // jA = iB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Long = rid1 * blkSize
-          val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          val offsetD1: Int = rid1 * blkSize
+          val offsetD2: Int = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2588,9 +2605,9 @@ case class JoinIndexExecution(left: SparkPlan,
         }
       case 4 => // jA = jB
         rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Long = rid1 * blkSize
-          val offsetD2: Long = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Long, Long, Int, Int), MLMatrix)]()
+          val offsetD1: Int = rid1 * blkSize
+          val offsetD2: Int = cid1 * blkSize
+          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
           val rand = new scala.util.Random()
           if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
             mat1 match {
@@ -2668,8 +2685,8 @@ case class JoinIndexExecution(left: SparkPlan,
       val b3 = elem._1._4
       val matrix = elem._2
       val res = new GenericInternalRow(5)
-      res.setLong(0, d1)
-      res.setLong(1, d2)
+      res.setInt(0, d1)
+      res.setInt(1, d2)
       res.setInt(2, b2)
       res.setInt(3, b3)
       res.update(4, MLMatrixSerializer.serialize(matrix))
@@ -2689,8 +2706,8 @@ case class GroupBy4DTensorExecution(child: SparkPlan,
   protected override def doExecute(): RDD[InternalRow] = {
     val rdd = child.execute()
     val rootRdd = rdd.map { row =>
-      val d1 = row.getLong(0)
-      val d2 = row.getLong(1)
+      val d1 = row.getInt(0)
+      val d2 = row.getInt(1)
       val b3 = row.getInt(2)
       val b4 = row.getInt(3)
       val matrix = MLMatrixSerializer.deserialize(row.getStruct(4, 7))
@@ -2709,8 +2726,8 @@ case class GroupBy4DTensorExecution(child: SparkPlan,
           .map { row =>
             val res = new GenericInternalRow(5)
             val mat = new DenseMatrix(1, 1, Array(row._2))
-            res.setLong(0, row._1)
-            res.setLong(1, -1L)
+            res.setInt(0, row._1)
+            res.setInt(1, -1)
             res.setInt(2, -1)
             res.setInt(3, -1)
             res.update(4, MLMatrixSerializer.serialize(mat))
@@ -2727,8 +2744,8 @@ case class GroupBy4DTensorExecution(child: SparkPlan,
             .map { row =>
               val res = new GenericInternalRow(5)
               val mat = new DenseMatrix(1, 1, Array(row._2))
-              res.setLong(0, row._1._1)
-              res.setLong(1, row._1._2)
+              res.setInt(0, row._1._1)
+              res.setInt(1, row._1._2)
               res.setInt(2, -1)
               res.setInt(3, -1)
               res.update(4, MLMatrixSerializer.serialize(mat))

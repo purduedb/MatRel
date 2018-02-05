@@ -316,17 +316,21 @@ case class JoinTwoIndicesOperator(leftChild: LogicalPlan,
 }
 
 case class CrossProductOperator(leftChild: LogicalPlan,
-                                 leftRowNum: Long,
-                                 leftColNum: Long,
-                                 rightChild: LogicalPlan,
-                                 rightRowNum: Long,
-                                 rightColNum: Long,
-                                 mergeFunc: (Double, Double) => Double,
-                                 blkSize: Int) extends BinaryNode {
+                                leftRowNum: Long,
+                                leftColNum: Long,
+                                isLeftSparse: Boolean,
+                                rightChild: LogicalPlan,
+                                rightRowNum: Long,
+                                rightColNum: Long,
+                                isRightSparse: Boolean,
+                                mergeFunc: (Double, Double) => Double,
+                                blkSize: Int) extends BinaryNode {
 
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(1001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(leftChild.output(0), leftChild.output(1))
 
   override def output: Seq[Attribute] = dim ++ rightChild.output
 
@@ -346,9 +350,11 @@ case class JoinOnValuesOperator(leftChild: LogicalPlan,
                                 mergeFunc: (Double, Double) => Double,
                                 blkSize: Int) extends BinaryNode {
 
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(10001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(leftChild.output(0), leftChild.output(1))
 
   override def output: Seq[Attribute] = dim ++ rightChild.output
 
@@ -371,9 +377,11 @@ case class JoinIndexValueOperator(leftChild: LogicalPlan,
                                   mergeFunc: (Double, Double) => Double,
                                   blkSize: Int) extends BinaryNode {
 
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(1001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(leftChild.output(0), leftChild.output(1))
 
   override def output: Seq[Attribute] = dim ++ rightChild.output
 
@@ -397,9 +405,11 @@ case class JoinIndexOperator(leftChild: LogicalPlan,
                              blkSize: Int) extends BinaryNode {
 
   // add one more index for debugging purpose
-  lazy val dim: Seq[Attribute] =
-    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1L)),
-      AttributeReference("dim2", LongType, nullable = false)(ExprId(2L)))
+  /*lazy val dim: Seq[Attribute] =
+    Seq(AttributeReference("dim1", LongType, nullable = false)(ExprId(1000)),
+      AttributeReference("dim2", LongType, nullable = false)(ExprId(1001)))*/
+
+  lazy val dim: Seq[Attribute] = Seq(leftChild.output(0), leftChild.output(1))
 
   override def output: Seq[Attribute] = dim ++ rightChild.output
 

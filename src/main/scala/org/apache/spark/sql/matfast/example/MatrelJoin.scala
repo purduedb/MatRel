@@ -17,23 +17,25 @@
 
 package org.apache.spark.sql.matfast.example
 
+import org.apache.spark.SparkException
 import org.apache.spark.mllib.linalg.distributed.MatrixEntry
-import org.apache.spark.sql.matfast.{MatfastSession}
-import org.apache.spark.sql.matfast.matrix.{CooMatrix, MatrixBlock}
-import org.apache.spark.sql.matfast.partitioner.{RowPartitioner}
+import org.apache.spark.sql.matfast.MatfastSession
+import org.apache.spark.sql.matfast.matrix.{CooMatrix, MatrixBlock, RowMatrix}
+import org.apache.spark.sql.matfast.partitioner.RowPartitioner
 import org.apache.spark.rdd.RDD
 
-object MatrelAgg {
+object MatrelJoin {
   def main(args: Array[String]): Unit = {
     if (args.length < 1) {
-      println("Usage: SparseMLlib <graphName>")
+      println("Usage: MatrelJoin <matrix1> <matrix2>")
       System.exit(1)
     }
     val hdfs = "hdfs://172.18.11.128:8020/user/yu163/"
-    val graphName = hdfs + "dataset/" + args(0)
+    val name1 = hdfs + "dataset/" + args(0)
+    val name2 = hdfs + "dataset/" + args(1)
     val savePath = hdfs + "result/"
     val matfastSession = MatfastSession.builder()
-      .appName("Matrel agg on mat-mat multiply")
+      .appName("Matrel cross-product")
       .master("spark://172.18.11.128:7077")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.shuffle.consolidateFiles", "true")
@@ -44,7 +46,7 @@ object MatrelAgg {
       .config("spark.default.parallelism", "200")
       .config("spark.rpc.message.maxSize", "1000")
       .getOrCreate()
-    runAggOnMatrixMultiply(matfastSession, graphName, savePath)
+    runMatrixJoin(matfastSession, name1, name2, savePath)
 
     matfastSession.stop()
   }
@@ -53,21 +55,47 @@ object MatrelAgg {
   implicit def kryoEncoder[A](implicit ct: ClassTag[A]) =
     org.apache.spark.sql.Encoders.kryo[A](ct)
 
-  private def runAggOnMatrixMultiply(spark: MatfastSession, graphname: String, savePath: String): Unit = {
+  private def runMatrixJoin(spark: MatfastSession, name1: String, name2: String, savePath: String): Unit = {
     import spark.implicits._
-    val (dim, matrixRDD) = getBlockMatrixRDD(spark, graphname)
-    val matrix = matrixRDD.toDS().cache()
+    var dim1: Long = 0L
+    var matrixRDD1: RDD[MatrixBlock] = null
+    var isLeftSparse = false
+    var isRightSparse = false
+    if (name1.contains(".txt")) {
+      val res = getSparseBlockMatrixRDD(spark, name1)
+      dim1 = res._1
+      matrixRDD1 = res._2
+      isLeftSparse = true
+    } else if (name1.contains(".csv")) {
+      val res = getDenseBlockMatrixRDD(spark, name1)
+      dim1 = res._1
+      matrixRDD1 = res._2
+    } else {
+      throw new SparkException("unsupported file format")
+    }
+    var dim2: Long = 0L
+    var matrixRDD2: RDD[MatrixBlock] = null
+    if (name2.contains(".txt")) {
+      val res = getSparseBlockMatrixRDD(spark, name2)
+      dim2 = res._1
+      matrixRDD2 = res._2
+      isRightSparse = true
+    } else if (name2.contains(".csv")) {
+      val res = getDenseBlockMatrixRDD(spark, name2)
+      dim2 = res._1
+      matrixRDD2 = res._2
+    } else {
+      throw new SparkException("unsupported file format")
+    }
+    val mat1 = matrixRDD1.toDS()
+    val mat2 = matrixRDD2.toDS()
     import spark.MatfastImplicits._
-    val G = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
-    G.rdd.count()
-    G.projectCell(dim, dim, 10000, 1, 1).rdd.saveAsTextFile(savePath)
-    //matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000).trace(dim, dim).rdd.saveAsTextFile(savePath)
-    /*val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
-    GG.rdd.count()
-    GG.trace(dim, dim).rdd.saveAsTextFile(savePath)*/
+    mat1.crossProduct(dim1, dim1, isLeftSparse,
+      mat2, dim2, dim2, isRightSparse,
+      (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
   }
 
-  def getBlockMatrixRDD(spark: MatfastSession, graphname: String): (Long, RDD[MatrixBlock]) = {
+  def getSparseBlockMatrixRDD(spark: MatfastSession, graphname: String): (Long, RDD[MatrixBlock]) = {
     val lines = spark.sparkContext.textFile(graphname, 8)
     val entries = lines.map { s =>
       val line = s.split("\\s+")
@@ -78,11 +106,21 @@ object MatrelAgg {
       }
     }.filter(x => x.i >= 0)
     val dim = math.max(entries.map(x => x.i).max, entries.map(x => x.j).max) + 1
-    val blkSize = 10000
+    val blkSize = 1000
     val coordinateMatrix = new CooMatrix(entries, dim, dim)
-    val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize).partitionBy(new RowPartitioner(100))
+    val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize).partitionBy(new RowPartitioner(50))
     val rdd = blkRDD.map (x => MatrixBlock(x._1._1, x._1._2, x._2))
     (dim, rdd)
   }
 
+  def getDenseBlockMatrixRDD(spark: MatfastSession, graphname: String): (Long, RDD[MatrixBlock]) = {
+    val lines = spark.sparkContext.textFile(graphname, 8)
+    val rowMat = new RowMatrix(lines)
+    val blkSize = 1000
+    val dimRdd = rowMat.toBlockMatrixRDD(blkSize)
+    val dim = dimRdd._1
+    val rdd = dimRdd._2.partitionBy(new RowPartitioner(50))
+      .map(x => MatrixBlock(x._1._1, x._1._2, x._2))
+    (dim, rdd)
+  }
 }

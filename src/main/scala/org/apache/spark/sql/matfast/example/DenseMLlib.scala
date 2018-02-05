@@ -51,7 +51,8 @@ object DenseMLlib {
     //val vecRDD = sc.parallelize(0 until gram_matrix.numCols().toInt).map(x => MatrixEntry(x.toLong, 0, 1.0))
     //val e = new CoordinateMatrix(vecRDD, dim, 1L).toBlockMatrix(blkSize, blkSize)
     //gram_matrix.multiply(e).blocks.saveAsTextFile(hdfs + "tmp_result/aggregation")
-    val trace = gram_matrix.blocks
+    gram_matrix.blocks.filter(x => x._1 == (0, 0)).saveAsTextFile(hdfs + "tmp_result/aggregation")
+    /*val trace = gram_matrix.blocks
       .map { case ((rid, cid), mat) =>
         if (rid != cid) {
           0.0
@@ -64,7 +65,7 @@ object DenseMLlib {
           diag
         }
       }.reduce(_ + _)
-    println(s"trace = $trace")
+    println(s"trace = $trace")*/
     Thread.sleep(10000)
   }
 

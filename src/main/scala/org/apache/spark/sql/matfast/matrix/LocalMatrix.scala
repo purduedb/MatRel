@@ -110,13 +110,49 @@ object LocalMatrix {
 
   private def computeDenseSparse(ma: DenseMatrix, mb: SparseMatrix,
                                  f: (Double, Double) => Double): MLMatrix = {
-    val (arr1, arr2) = (ma.toArray, mb.toArray)
-    val arr = Array.fill(math.min(arr1.length, arr2.length))(0.0)
-    for (i <- 0 until arr.length) {
-      arr(i) = f(arr1(i), arr2(i))
+    val rand = new scala.util.Random()
+    if (math.abs(f(rand.nextDouble(), 0.0)) > 1e-6) { // no zero-preserving property on f()
+      val (arr1, arr2) = (ma.toArray, mb.toArray)
+      val arr = Array.fill(math.min(arr1.length, arr2.length))(0.0)
+      for (i <- 0 until arr.length) {
+        arr(i) = f(arr1(i), arr2(i))
+      }
+      new DenseMatrix(math.min(ma.numRows, mb.numRows),
+        math.min(ma.numCols, mb.numCols), arr)
+    } else {
+      if (ma.numRows * ma.numCols <= mb.numRows * mb.numCols) { // sparse matrix input is smaller
+        val arr = Array.fill(mb.values.length)(0.0)
+        if (!mb.isTransposed) {
+          for (k <- 0 until mb.numCols) {
+            val cnt = mb.colPtrs(k + 1) - mb.colPtrs(k)
+            for (j <- 0 until cnt) {
+              val ind = mb.colPtrs(k) + j
+              val rid = mb.rowIndices(ind)
+              arr(ind) = f(ma(rid, k), mb.values(ind))
+            }
+          }
+        } else {
+          for (k <- 0 until mb.numRows) {
+            val cnt = mb.colPtrs(k + 1) - mb.colPtrs(k)
+            for (i <- 0 until cnt) {
+              val ind = mb.colPtrs(k) + i
+              val cid = mb.rowIndices(ind)
+              arr(ind) = f(ma(k, cid), mb.values(ind))
+            }
+          }
+        }
+        new SparseMatrix(mb.numRows, mb.numCols, mb.colPtrs, mb.rowIndices, arr, mb.isTransposed)
+      } else { // dense matrix is smaller
+        val arr = Array.fill(ma.values.length)(0.0)
+        val (arr1, arr2) = (ma.toArray, mb.toArray)
+        for (i <- 0 until arr.length) {
+          if (arr2(i) > 0.0) {
+            arr(i) = f(arr1(i), arr2(i))
+          }
+        }
+        new DenseMatrix(ma.numRows, ma.numCols, arr)
+      }
     }
-    new DenseMatrix(math.min(ma.numRows, mb.numRows),
-      math.min(ma.numCols, mb.numCols), arr)
   }
 
   private def addDenseSparse(ma: DenseMatrix, mb: SparseMatrix): MLMatrix = {
@@ -128,23 +164,133 @@ object LocalMatrix {
     new DenseMatrix(ma.numRows, ma.numCols, arr)
   }
 
-  // This is NOT the optimal implementation for sparse computation on user-defined functions.
+  // This is an optimized implementation for sparse computation on user-defined functions.
   private def computeSparseSparse(ma: SparseMatrix, mb: SparseMatrix,
                                   f: (Double, Double) => Double): MLMatrix = {
-    val (arr1, arr2) = (ma.toArray, mb.toArray)
-    val arr = Array.fill(math.min(arr1.length, arr2.length))(0.0)
-    var nnz = 0
-    for (i <- 0 until arr.length) {
-      arr(i) = f(arr1(i), arr2(i))
-      if (arr(i) != 0) nnz += 1
-    }
-    val c = new DenseMatrix(math.min(ma.numRows, mb.numRows),
-      math.min(ma.numCols, mb.numCols), arr)
-    if (c.numRows * c.numCols > nnz * 2 + c.numCols + 1) {
-      c.toSparse
-    }
-    else {
-      c
+    val rand = new scala.util.Random()
+    if (math.abs(f(rand.nextDouble(), 0.0)) > 1e-6 &&
+      math.abs(f(0.0, rand.nextDouble())) > 1e-6 ) { // no zero-preserving property on f()
+      val (arr1, arr2) = (ma.toArray, mb.toArray)
+      val arr = Array.fill(math.min(arr1.length, arr2.length))(0.0)
+      var nnz = 0
+      for (i <- 0 until arr.length) {
+        arr(i) = f(arr1(i), arr2(i))
+        if (arr(i) != 0) nnz += 1
+      }
+      val c = new DenseMatrix(math.min(ma.numRows, mb.numRows),
+        math.min(ma.numCols, mb.numCols), arr)
+      if (c.numRows * c.numCols > nnz * 2 + c.numCols + 1) {
+        c.toSparse
+      }
+      else {
+        c
+      }
+    } else {
+      if (math.abs(f(0.0, rand.nextDouble())) > 1e-6) { // zero-preserving on the left
+        if (ma.numRows * ma.numCols <= mb.numRows * mb.numCols) {
+          val arr = Array.fill(ma.values.length)(0.0)
+          if (!ma.isTransposed) {
+            for (k <- 0 until ma.numCols) {
+              val cnt = ma.colPtrs(k + 1) - ma.colPtrs(k)
+              for (j <- 0 until cnt) {
+                val ind = ma.colPtrs(k) + j
+                val rid = ma.rowIndices(ind)
+                arr(ind) = f(ma.values(ind), mb(rid, k))
+              }
+            }
+          } else {
+            for (k <- 0 until ma.numRows) {
+              val cnt = ma.colPtrs(k + 1) - ma.colPtrs(k)
+              for (i <- 0 until cnt) {
+                val ind = ma.colPtrs(k) + i
+                val cid = ma.rowIndices(ind)
+                arr(ind) = f(ma.values(ind), mb(k, cid))
+              }
+            }
+          }
+          new SparseMatrix(ma.numRows, ma.numCols, ma.colPtrs, ma.rowIndices, arr, ma.isTransposed)
+        } else {
+          val arr = Array.fill(mb.values.length)(0.0)
+          if (!mb.isTransposed) {
+            for (k <- 0 until mb.numCols) {
+              val cnt = mb.colPtrs(k + 1) - mb.colPtrs(k)
+              for (j <- 0 until cnt) {
+                val ind = mb.colPtrs(k) + j
+                val rid = mb.rowIndices(ind)
+                val mav = ma(rid, k)
+                if (mav > 0.0) {
+                  arr(ind) = f(mav, mb.values(ind))
+                }
+              }
+            }
+          } else {
+            for (k <- 0 until mb.numRows) {
+              val cnt = mb.colPtrs(k + 1) - mb.colPtrs(k)
+              for (i <- 0 until cnt) {
+                val ind = mb.colPtrs(k) + i
+                val cid = mb.rowIndices(ind)
+                val mav = ma(k, cid)
+                if (mav > 0.0) {
+                  arr(ind) = f(mav, mb.values(ind))
+                }
+              }
+            }
+          }
+          new SparseMatrix(mb.numRows, mb.numCols, mb.colPtrs, mb.rowIndices, arr, mb.isTransposed)
+        }
+      } else { // zero-preserving on the right
+        if (ma.numRows * ma.numCols >= mb.numRows * mb.numCols) {
+          val arr = Array.fill(mb.values.length)(0.0)
+          if (!mb.isTransposed) {
+            for (k <- 0 until mb.numCols) {
+              val cnt = mb.colPtrs(k + 1) - mb.colPtrs(k)
+              for (j <- 0 until cnt) {
+                val ind = mb.colPtrs(k) + j
+                val rid = mb.rowIndices(ind)
+                arr(ind) = f(ma(rid, k), mb.values(ind))
+              }
+            }
+          } else {
+            for (k <- 0 until mb.numRows) {
+              val cnt = mb.colPtrs(k + 1) - mb.colPtrs(k)
+              for (i <- 0 until cnt) {
+                val ind = mb.colPtrs(k) + i
+                val cid = mb.rowIndices(ind)
+                arr(ind) = f(ma(k, cid), mb.values(ind))
+              }
+            }
+          }
+          new SparseMatrix(mb.numRows, mb.numCols, mb.colPtrs, mb.rowIndices, arr, mb.isTransposed)
+        } else {
+          val arr = Array.fill(ma.values.length)(0.0)
+          if (!ma.isTransposed) {
+            for (k <- 0 until ma.numCols) {
+              val cnt = ma.colPtrs(k + 1) - ma.colPtrs(k)
+              for (j <- 0 until cnt) {
+                val ind = ma.colPtrs(k) + j
+                val rid = ma.rowIndices(ind)
+                val mbv = mb(rid, k)
+                if (mbv > 0.0) {
+                  arr(ind) = f(ma.values(ind), mbv)
+                }
+              }
+            }
+          } else {
+            for (k <- 0 until ma.numRows) {
+              val cnt = ma.colPtrs(k + 1) - ma.colPtrs(k)
+              for (i <- 0 until cnt) {
+                val ind = ma.colPtrs(k) + i
+                val cid = ma.rowIndices(ind)
+                val mbv = mb(k, cid)
+                if (mbv > 0.0) {
+                  arr(ind) = f(ma.values(ind), mbv)
+                }
+              }
+            }
+          }
+          new SparseMatrix(ma.numRows, ma.numCols, ma.colPtrs, ma.rowIndices, arr, ma.isTransposed)
+        }
+      }
     }
   }
 

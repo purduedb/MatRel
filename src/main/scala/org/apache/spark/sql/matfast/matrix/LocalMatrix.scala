@@ -95,7 +95,8 @@ object LocalMatrix {
     for (i <- 0 until arr.length) {
       arr(i) = f(arr1(i), arr2(i))
     }
-    new DenseMatrix(ma.numRows, ma.numCols, arr)
+    new DenseMatrix(math.min(ma.numRows, mb.numRows),
+      math.min(ma.numCols, mb.numCols), arr)
   }
 
   private def addDense(ma: DenseMatrix, mb: DenseMatrix): MLMatrix = {
@@ -114,7 +115,8 @@ object LocalMatrix {
     for (i <- 0 until arr.length) {
       arr(i) = f(arr1(i), arr2(i))
     }
-    new DenseMatrix(ma.numRows, ma.numCols, arr)
+    new DenseMatrix(math.min(ma.numRows, mb.numRows),
+      math.min(ma.numCols, mb.numCols), arr)
   }
 
   private def addDenseSparse(ma: DenseMatrix, mb: SparseMatrix): MLMatrix = {
@@ -136,7 +138,8 @@ object LocalMatrix {
       arr(i) = f(arr1(i), arr2(i))
       if (arr(i) != 0) nnz += 1
     }
-    val c = new DenseMatrix(ma.numRows, ma.numCols, arr)
+    val c = new DenseMatrix(math.min(ma.numRows, mb.numRows),
+      math.min(ma.numCols, mb.numCols), arr)
     if (c.numRows * c.numCols > nnz * 2 + c.numCols + 1) {
       c.toSparse
     }

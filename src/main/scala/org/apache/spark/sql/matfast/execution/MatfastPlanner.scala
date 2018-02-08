@@ -470,9 +470,9 @@ object MatrixOperators extends Strategy {
     case RemoveEmptyRowsOperator(ch) => RemoveEmptyRowsDirectExecution(planLater(ch)) :: Nil
     case RemoveEmptyColumnsOperator(ch) => RemoveEmptyColumnsDirectExecution(planLater(ch)) :: Nil
     case JoinTwoIndicesOperator(left, leftRowNum, leftColNum,
-    right, rightRowNum, rightColNum, mergeFunc, blkSize) =>
+    right, rightRowNum, rightColNum, mergeFunc, blkSize, isSwapped) =>
       JoinTwoIndicesExecution(planLater(left), leftRowNum, leftColNum,
-        planLater(right), rightRowNum, rightColNum, mergeFunc, blkSize) :: Nil
+        planLater(right), rightRowNum, rightColNum, mergeFunc, blkSize, isSwapped) :: Nil
     case CrossProductOperator(left, leftRowNum, leftColNum, isLeftSparse,
     right, rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize) =>
       CrossProductExecution(planLater(left), leftRowNum, leftColNum, isLeftSparse,

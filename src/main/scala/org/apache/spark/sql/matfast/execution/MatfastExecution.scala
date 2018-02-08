@@ -21,11 +21,11 @@ import scala.collection.mutable.ArrayBuffer
 import util.control.Breaks._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkException
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, GenericInternalRow, ExprId}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, ExprId, GenericInternalRow}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.matfast.matrix._
-import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, RowPartitioner}
+import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util._
 import org.apache.spark.sql.types.LongType
 
@@ -1665,7 +1665,8 @@ case class JoinTwoIndicesExecution(left: SparkPlan,
                                    rightRowNum: Long,
                                    rightColNum: Long,
                                    mergeFunc: (Double, Double) => Double,
-                                   blkSize: Int) extends MatfastPlan {
+                                   blkSize: Int,
+                                   isSwapped: Boolean) extends MatfastPlan {
 
   override def output: Seq[Attribute] = left.output
 
@@ -1686,22 +1687,92 @@ case class JoinTwoIndicesExecution(left: SparkPlan,
     }
     val p1 = rdd1.partitioner.getOrElse(null)
     val p2 = rdd2.partitioner.getOrElse(null)
-    if (p1 == null && p2 == null) { // if no partitioner is applied, just use RowPartitioner
-      val p = new RowPartitioner(32)
-      rdd1 = rdd1.partitionBy(p)
-      rdd2 = rdd2.partitionBy(p)
-    } else {
-      if (leftRowNum * leftColNum <= rightRowNum * rightColNum) { // left-hand side is smaller
-        if (p2 != null) {
-          rdd1 = rdd1.partitionBy(p2)
-        } else {
-          rdd2 = rdd2.partitionBy(p1)
+    if (!isSwapped) {
+      if (p1 == null && p2 == null) { // if no partitioner is applied, just use RowPartitioner
+        val p = new RowPartitioner(32)
+        rdd1 = rdd1.partitionBy(p)
+        rdd2 = rdd2.partitionBy(p)
+      } else if (p1 != null && p2 != null) {
+        if (!p1.equals(p2)) {
+         rdd2 = rdd2.partitionBy(p1)
         }
       } else {
-        if (p1 != null) {
-          rdd2 = rdd2.partitionBy(p1)
+        if (leftRowNum * leftColNum <= rightRowNum * rightColNum) { // left-hand side is smaller
+          if (p2 != null) {
+            rdd1 = rdd1.partitionBy(p2)
+          } else {
+            rdd2 = rdd2.partitionBy(p1)
+          }
         } else {
-          rdd1 = rdd1.partitionBy(p2)
+          if (p1 != null) {
+            rdd2 = rdd2.partitionBy(p1)
+          } else {
+            rdd1 = rdd1.partitionBy(p2)
+          }
+        }
+      }
+    } else {
+      if (p1 == null && p2 == null) { // if no partitioner is applied
+        val p = new RowPartitioner(32)
+        val q = new ColumnPartitioner(32)
+        rdd1 = rdd1.partitionBy(p)
+        rdd2 = rdd2.partitionBy(q)
+      } else if (p1 != null && p2 != null) {
+        if (p1.isInstanceOf[RowPartitioner] && p2.isInstanceOf[RowPartitioner]) {
+          rdd2 = rdd2.partitionBy(new ColumnPartitioner(p1.numPartitions))
+        }
+        if (p1.isInstanceOf[ColumnPartitioner] && p2.isInstanceOf[ColumnPartitioner]) {
+          rdd1 = rdd1.partitionBy(new RowPartitioner(p2.numPartitions))
+        }
+      } else {
+        if (leftRowNum * leftColNum <= rightRowNum * rightColNum) { // left-hand side is smaller
+          if (p2 != null) {
+            if (p2.isInstanceOf[RowPartitioner]) {
+              rdd1 = rdd1.partitionBy(new ColumnPartitioner(p2.numPartitions))
+            } else if (p2.isInstanceOf[ColumnPartitioner]) {
+              rdd1 = rdd1.partitionBy(new RowPartitioner(p2.numPartitions))
+            } else {
+              val p = new RowPartitioner(32)
+              val q = new ColumnPartitioner(32)
+              rdd1 = rdd1.partitionBy(p)
+              rdd2 = rdd2.partitionBy(q)
+            }
+          } else {
+            if (p1.isInstanceOf[RowPartitioner]) {
+              rdd2 = rdd2.partitionBy(new ColumnPartitioner(p1.numPartitions))
+            } else if (p1.isInstanceOf[ColumnPartitioner]) {
+              rdd2 = rdd2.partitionBy(new RowPartitioner(p1.numPartitions))
+            } else {
+              val p = new RowPartitioner(32)
+              val q = new ColumnPartitioner(32)
+              rdd1 = rdd1.partitionBy(p)
+              rdd2 = rdd2.partitionBy(q)
+            }
+          }
+        } else {
+          if (p1 != null) {
+            if (p1.isInstanceOf[RowPartitioner]) {
+              rdd2 = rdd2.partitionBy(new ColumnPartitioner(p1.numPartitions))
+            } else if (p1.isInstanceOf[ColumnPartitioner]) {
+              rdd2 = rdd2.partitionBy(new RowPartitioner(p1.numPartitions))
+            } else {
+              val p = new RowPartitioner(32)
+              val q = new ColumnPartitioner(32)
+              rdd1 = rdd1.partitionBy(p)
+              rdd2 = rdd2.partitionBy(q)
+            }
+          } else {
+            if (p2.isInstanceOf[RowPartitioner]) {
+              rdd1 = rdd1.partitionBy(new ColumnPartitioner(p2.numPartitions))
+            } else if (p2.isInstanceOf[ColumnPartitioner]) {
+              rdd1 = rdd1.partitionBy(new RowPartitioner(p2.numPartitions))
+            } else {
+              val p = new RowPartitioner(32)
+              val q = new ColumnPartitioner(32)
+              rdd1 = rdd1.partitionBy(p)
+              rdd2 = rdd2.partitionBy(q)
+            }
+          }
         }
       }
     }
@@ -1713,12 +1784,22 @@ case class JoinTwoIndicesExecution(left: SparkPlan,
           val key = elem._1
           if (!key2val.contains(key)) key2val.putIfAbsent(key, elem._2)
         }
-
-        for (elem <- iter2) {
-          val key = elem._1
-          if (key2val.contains(key)) {
-            val tmp = key2val.get(key).get
-            res.putIfAbsent(key, LocalMatrix.compute(tmp, elem._2, mergeFunc))
+        if (!isSwapped) {
+          for (elem <- iter2) {
+            val key = elem._1
+            if (key2val.contains(key)) {
+              val tmp = key2val.get(key).get
+              res.putIfAbsent(key, LocalMatrix.compute(tmp, elem._2, mergeFunc))
+            }
+          }
+        } else {
+          for (elem <- iter2) {
+            val key = elem._1
+            val swappedKey = (key._2, key._1)
+            if (key2val.contains(swappedKey)) {
+              val tmp = key2val.get(swappedKey).get
+              res.putIfAbsent(swappedKey, LocalMatrix.compute(tmp, elem._2, mergeFunc))
+            }
           }
         }
         res.iterator
@@ -2348,6 +2429,7 @@ case class JoinIndexValueExecution(left: SparkPlan,
 
 // mode = 1, 2, 3, 4
 // iA = iB, iA = jB, jA = iB, jA = jB
+// TODO: change cartesian product to zipPartitions
 case class JoinIndexExecution(left: SparkPlan,
                               leftRowNum: Long,
                               leftColNum: Long,

@@ -21,7 +21,7 @@ import org.apache.spark.SparkException
 import org.apache.spark.mllib.linalg.distributed.MatrixEntry
 import org.apache.spark.sql.matfast.MatfastSession
 import org.apache.spark.sql.matfast.matrix.{CooMatrix, MatrixBlock, RowMatrix}
-import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, RowPartitioner}
+import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, RowPartitioner}
 import org.apache.spark.rdd.RDD
 
 object MatrelJoin {
@@ -90,8 +90,10 @@ object MatrelJoin {
     val mat1 = matrixRDD1.toDS()
     val mat2 = matrixRDD2.toDS()
     import spark.MatfastImplicits._
+    //mat1.joinOnSingleIndex(dim1, dim1, mat2, dim2, dim2, 1,
+    //  (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
     mat1.joinTwoIndices(dim1, dim1, mat2, dim2, dim2,
-      (x: Double, y: Double) => x * y,  1000).rdd.saveAsTextFile(savePath)
+      (x: Double, y: Double) => x * y, 1000, true).rdd.saveAsTextFile(savePath)
     /*mat1.crossProduct(dim1, dim1, isLeftSparse,
       mat2, dim2, dim2, isRightSparse,
       (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)*/
@@ -114,7 +116,7 @@ object MatrelJoin {
     //val blk_num = math.ceil(dim * 1.0 / blkSize).toInt
     //val blkCyclic = new BlockCyclicPartitioner(blk_num, blk_num, blkSize, blkSize)
     //val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize).partitionBy(blkCyclic)
-    val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize).partitionBy(new RowPartitioner(50))
+    val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize).partitionBy(new RowPartitioner(100))
     val rdd = blkRDD.map (x => MatrixBlock(x._1._1, x._1._2, x._2))
     (dim, rdd)
   }
@@ -128,7 +130,7 @@ object MatrelJoin {
     //val blk_num = math.ceil(dim * 1.0 / blkSize).toInt
     //val blkCyclic = new BlockCyclicPartitioner(blk_num, blk_num, blkSize, blkSize)
     //val rdd = dimRdd._2.partitionBy(blkCyclic)
-    val rdd = dimRdd._2.partitionBy(new RowPartitioner(50))
+    val rdd = dimRdd._2.partitionBy(new RowPartitioner(100))
       .map(x => MatrixBlock(x._1._1, x._1._2, x._2))
     (dim, rdd)
   }

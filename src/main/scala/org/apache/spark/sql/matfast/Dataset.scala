@@ -259,6 +259,7 @@ class Dataset[T] private[matfast]
                      rightRowNum: Long, rightColNum: Long,
                      mergeFunc: (Double, Double) => Double,
                      blkSize: Int,
+                     isSwapped: Boolean = false,
                      data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
   = withPlan {
     require(leftColNum > blkSize && leftRowNum > blkSize,
@@ -266,7 +267,7 @@ class Dataset[T] private[matfast]
     require(rightRowNum > blkSize && rightColNum > blkSize,
       s"right matrix size is smaller than blkSize")
     JoinTwoIndicesOperator(this.logicalPlan, leftRowNum, leftColNum,
-      right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize)
+      right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize, isSwapped)
   }
 
   // This crossProduct() should be used with great caution, as it may blow the cluster memory.

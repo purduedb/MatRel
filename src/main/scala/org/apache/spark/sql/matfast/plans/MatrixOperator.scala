@@ -299,6 +299,7 @@ case class RankOneUpdateOperator(leftChild: LogicalPlan,
 
 // this class implements join operator on two matrices, block size must be the same
 // for the 2 matrices, especially, this join focuses on join on the two indices
+// isSwapped = false, direct overlay; otherwise, transpose overlay
 case class JoinTwoIndicesOperator(leftChild: LogicalPlan,
                                   leftRowNum: Long,
                                   leftColNum: Long,
@@ -306,7 +307,8 @@ case class JoinTwoIndicesOperator(leftChild: LogicalPlan,
                                   rightRowNum: Long,
                                   rightColNum: Long,
                                   mergeFunc: (Double, Double) => Double,
-                                  blkSize: Int) extends BinaryNode {
+                                  blkSize: Int,
+                                  isSwapped: Boolean) extends BinaryNode {
 
   override def output: Seq[Attribute] = leftChild.output
 

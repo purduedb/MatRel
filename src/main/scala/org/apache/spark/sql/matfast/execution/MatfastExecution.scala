@@ -57,7 +57,7 @@ case class RemoveEmptyColumnsDirectExecution(child: SparkPlan) extends MatfastPl
   }
 }
 
-case class ProjectRowDirectExecution(child: SparkPlan,
+case class SelectRowDirectExecution(child: SparkPlan,
                                      blkSize: Int,
                                      index: Long) extends MatfastPlan {
 
@@ -119,7 +119,7 @@ case class ProjectRowDirectExecution(child: SparkPlan,
             resRowIndices, resValues.toArray)
           ((0, cid), matBlk.asInstanceOf[MLMatrix])
         case _ =>
-          throw new SparkException("Undefined matrix type in ProjectRowDirectExecute()")
+          throw new SparkException("Undefined matrix type in SelectRowDirectExecute()")
       }
     }
     rdd.map { blk =>
@@ -132,7 +132,7 @@ case class ProjectRowDirectExecution(child: SparkPlan,
   }
 }
 
-case class ProjectColumnDirectExecution(child: SparkPlan,
+case class SelectColumnDirectExecution(child: SparkPlan,
                                         blkSize: Int,
                                         index: Long) extends MatfastPlan {
 
@@ -184,7 +184,7 @@ case class ProjectColumnDirectExecution(child: SparkPlan,
             resRowIndices.toArray, resValues.toArray)
           ((rid, 0), matBlk.asInstanceOf[MLMatrix])
         case _ =>
-          throw new SparkException("Undefined matrix type in ProjectColumnDirectExecute()")
+          throw new SparkException("Undefined matrix type in SelectColumnDirectExecute()")
       }
     }
     rdd.map { blk =>
@@ -197,7 +197,7 @@ case class ProjectColumnDirectExecution(child: SparkPlan,
   }
 }
 
-case class SelectDirectExecution(child: SparkPlan,
+case class SelectCellDirectExecution(child: SparkPlan,
                                  blkSize: Int,
                                  rowIdx: Long,
                                  colIdx: Long) extends MatfastPlan {

@@ -35,28 +35,28 @@ class Dataset[T] private[matfast]
     this(sparkSession, sparkSession.sessionState.executePlan(logicalPlan), encoder)
   }
 
-  def projectRow(nrows: Long, ncols: Long, blkSize: Int, index: Long,
+  def selectRow(nrows: Long, ncols: Long, blkSize: Int, index: Long,
                  data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     require(index <= nrows && index >= 1,
       s"row index should be smaller than #rows, index=$index, #rows=$nrows")
-    ProjectOperator(this.logicalPlan, nrows, ncols, blkSize, true, index - 1)
+    SelectOperator(this.logicalPlan, nrows, ncols, blkSize, true, index - 1)
   }
 
-  def projectColumn(nrows: Long, ncols: Long, blkSize: Int, index: Long,
+  def selectColumn(nrows: Long, ncols: Long, blkSize: Int, index: Long,
                     data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     require(index <= ncols &&  index >= 1,
       s"col index should be smaller than #cols, index=$index, #cols=$ncols")
-    ProjectOperator(this.logicalPlan, nrows, ncols, blkSize, false, index - 1)
+    SelectOperator(this.logicalPlan, nrows, ncols, blkSize, false, index - 1)
   }
 
-  def projectCell(nrows: Long, ncols: Long, blkSize: Int,
+  def selectCell(nrows: Long, ncols: Long, blkSize: Int,
              rowIdx: Long, colIdx: Long,
              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     require(rowIdx <= nrows && rowIdx >= 1,
       s"row index should be smaller than #rows, rid=$rowIdx, #rows=$nrows")
     require(colIdx <= ncols && colIdx >= 1,
       s"col index should be smaller than #cols, cid=$colIdx, #cols=$ncols")
-    ProjectCellOperator(this.logicalPlan, nrows, ncols, blkSize, rowIdx - 1, colIdx - 1)
+    SelectCellOperator(this.logicalPlan, nrows, ncols, blkSize, rowIdx - 1, colIdx - 1)
   }
 
   def t(): DataFrame = transpose()

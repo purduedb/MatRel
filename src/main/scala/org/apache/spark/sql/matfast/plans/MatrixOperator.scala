@@ -21,9 +21,9 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference,
 import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LogicalPlan, UnaryNode}
 import org.apache.spark.sql.types.LongType
 
-// Project a row or column from a given matrix
+// Select a row or column from a given matrix
 // rowOrCol: true -- project a row; otherwise, project a column
-case class ProjectOperator(child: LogicalPlan,
+case class SelectOperator(child: LogicalPlan,
                            nrows: Long,
                            ncols: Long,
                            blkSize: Int,
@@ -32,7 +32,7 @@ case class ProjectOperator(child: LogicalPlan,
   override def output: Seq[Attribute] = child.output
 }
 
-case class ProjectCellOperator(child: LogicalPlan,
+case class SelectCellOperator(child: LogicalPlan,
                           nrows: Long,
                           ncols: Long,
                           blkSize: Int,

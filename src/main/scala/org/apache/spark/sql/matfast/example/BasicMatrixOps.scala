@@ -33,8 +33,8 @@ object BasicMatrixOps {
     // runMatrixElement(matfastSession)
     // runMatrixMultiplication(matfastSession)
     // runMatrixAggregation(matfastSession)
-    // runMatrixProjection(matfastSession)
-    // runMatrixProjectCell(matfastSession)
+    // runMatrixSelection(matfastSession)
+    // runMatrixSelectCell(matfastSession)
     // runMatrixSelectValue(matfastSession)
     // runMatrixCount(matfastSession)
     // runMatrixAvg(matfastSession)
@@ -189,7 +189,7 @@ object BasicMatrixOps {
     }
   }
 
-  private def runMatrixProjection(spark: MatfastSession): Unit = {
+  private def runMatrixSelection(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2, 2, Array[Double](1, 1, 2, 2))
     val b2 = new DenseMatrix(2, 2, Array[Double](2, 2, 3, 3))
@@ -202,7 +202,7 @@ object BasicMatrixOps {
 
     import spark.MatfastImplicits._
 
-    val mat1_proj_row = mat1.t().projectRow(4, 4, 2, 3)
+    val mat1_proj_row = mat1.t().selectRow(4, 4, 2, 3)
     mat1_proj_row.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off
@@ -227,7 +227,7 @@ object BasicMatrixOps {
     }*/
   }
 
-  private def runMatrixProjectCell(spark: MatfastSession): Unit = {
+  private def runMatrixSelectCell(spark: MatfastSession): Unit = {
     import spark.implicits._
     val b1 = new DenseMatrix(2, 2, Array[Double](1, 1, 2, 2))
     val b2 = new DenseMatrix(2, 2, Array[Double](2, 2, 3, 3))
@@ -241,7 +241,7 @@ object BasicMatrixOps {
     import spark.MatfastImplicits._
 
     // select on the product of (mat1 X mat2)
-    val mat_select = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).projectCell(4, 4, 2, 1, 4)
+    val mat_select = mat1.matrixMultiply(4, 4, mat2, 4, 4, 2).selectCell(4, 4, 2, 1, 4)
     mat_select.rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1))
       // scalastyle:off

@@ -59,7 +59,7 @@ object MatrelAggDense {
     import spark.MatfastImplicits._
     val G = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000)
       G.rdd.count()
-      G.projectCell(dim, dim, 1000, 1, 1).rdd.saveAsTextFile(savePath)
+      G.selectCell(dim, dim, 1000, 1, 1).rdd.saveAsTextFile(savePath)
     //matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000).trace(dim, dim).rdd.saveAsTextFile(savePath)
     //val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 1000)
     //GG.rdd.count()

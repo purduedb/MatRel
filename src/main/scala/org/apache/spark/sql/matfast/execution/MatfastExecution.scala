@@ -2467,297 +2467,13 @@ case class JoinIndexExecution(left: SparkPlan,
 
     val joinRdd = mode match {
       case 1 => // iA = iB
-        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Int = rid1 * blkSize
-          val offsetD2: Int = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
-          val rand = new scala.util.Random()
-          if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
-            mat1 match {
-              case den: DenseMatrix =>
-                for (i <- 0 until den.numRows) {
-                  for (j <- 0 until den.numCols) {
-                    if (math.abs(den(i, j) - 0.0) > 1e-6) {
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, den(i, j),
-                        rid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case sp: SparseMatrix =>
-                if (!sp.isTransposed) { // CSC format
-                  for (j <- 0 until sp.numCols) {
-                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
-                      val ind = sp.colPtrs(j) + k
-                      val i = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, sp.values(ind),
-                        rid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                } else { // CSR format
-                  for (i <- 0 until sp.numRows) {
-                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
-                      val ind = sp.colPtrs(i) + k
-                      val j = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, sp.values(ind),
-                        rid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case _ => throw new SparkException("Illegal matrix type")
-            }
-          } else {
-            for (i <- 0 until mat1.numRows) {
-              for (j <- 0 until mat1.numCols) {
-                val offsetRid = offsetD1 + i
-                val offsetCid = offsetD2 + j
-                val join = LocalMatrix.UDF_Value_Match_Index1(offsetRid + 1, mat1(i, j),
-                  rid2, mat2, blkSize, mergeFunc)
-                if (join._1) {
-                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                  joinRes += insert
-                }
-              }
-            }
-          }
-          joinRes.iterator
-        }
+        joinRidRidExecution(rdd1, rdd2, mergeFunc)
       case 2 => // iA = jB
-        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Int = rid1 * blkSize
-          val offsetD2: Int = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
-          val rand = new scala.util.Random()
-          if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
-            mat1 match {
-              case den: DenseMatrix =>
-                for (i <- 0 until den.numRows) {
-                  for (j <- 0 until den.numCols) {
-                    if (math.abs(den(i, j) - 0.0) > 1e-6) {
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, den(i, j),
-                        cid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case sp: SparseMatrix =>
-                if (!sp.isTransposed) { // CSC format
-                  for (j <- 0 until sp.numCols) {
-                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
-                      val ind = sp.colPtrs(j) + k
-                      val i = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, sp.values(ind),
-                        cid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                } else { // CSR format
-                  for (i <- 0 until sp.numRows) {
-                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
-                      val ind = sp.colPtrs(i) + k
-                      val j = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, sp.values(ind),
-                        cid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case _ => throw new SparkException("Illegal matrix type")
-            }
-          } else {
-            for (i <- 0 until mat1.numRows) {
-              for (j <- 0 until mat1.numCols) {
-                val offsetRid = offsetD1 + i
-                val offsetCid = offsetD2 + j
-                val join = LocalMatrix.UDF_Value_Match_Index2(offsetRid + 1, mat1(i, j),
-                  cid2, mat2, blkSize, mergeFunc)
-                if (join._1) {
-                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                  joinRes += insert
-                }
-              }
-            }
-          }
-          joinRes.iterator
-        }
+        joinRidCidExecution(rdd1, rdd2, mergeFunc)
       case 3 => // jA = iB
-        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Int = rid1 * blkSize
-          val offsetD2: Int = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
-          val rand = new scala.util.Random()
-          if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
-            mat1 match {
-              case den: DenseMatrix =>
-                for (i <- 0 until den.numRows) {
-                  for (j <- 0 until den.numCols) {
-                    if (math.abs(den(i, j) - 0.0) > 1e-6) {
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, den(i, j),
-                        rid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case sp: SparseMatrix =>
-                if (!sp.isTransposed) { // CSC format
-                  for (j <- 0 until sp.numCols) {
-                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
-                      val ind = sp.colPtrs(j) + k
-                      val i = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, sp.values(ind),
-                        rid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                } else { // CSR format
-                  for (i <- 0 until sp.numRows) {
-                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
-                      val ind = sp.colPtrs(i) + k
-                      val j = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, sp.values(ind),
-                        rid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case _ => throw new SparkException("Illegal matrix type")
-            }
-          } else {
-            for (i <- 0 until mat1.numRows) {
-              for (j <- 0 until mat1.numCols) {
-                val offsetRid = offsetD1 + i
-                val offsetCid = offsetD2 + j
-                val join = LocalMatrix.UDF_Value_Match_Index1(offsetCid + 1, mat1(i, j),
-                  rid2, mat2, blkSize, mergeFunc)
-                if (join._1) {
-                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                  joinRes += insert
-                }
-              }
-            }
-          }
-          joinRes.iterator
-        }
+        joinCidRidExecution(rdd1, rdd2, mergeFunc)
       case 4 => // jA = jB
-        rdd1.cartesian(rdd2).flatMap { case (((rid1, cid1), mat1), ((rid2, cid2), mat2)) =>
-          val offsetD1: Int = rid1 * blkSize
-          val offsetD2: Int = cid1 * blkSize
-          val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
-          val rand = new scala.util.Random()
-          if (math.abs(mergeFunc(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
-            mat1 match {
-              case den: DenseMatrix =>
-                for (i <- 0 until den.numRows) {
-                  for (j <- 0 until den.numCols) {
-                    if (math.abs(den(i, j) - 0.0) > 1e-6) {
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, den(i, j),
-                        cid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case sp: SparseMatrix =>
-                if (!sp.isTransposed) { // CSC format
-                  for (j <- 0 until sp.numCols) {
-                    for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
-                      val ind = sp.colPtrs(j) + k
-                      val i = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, sp.values(ind),
-                        cid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                } else { // CSR format
-                  for (i <- 0 until sp.numRows) {
-                    for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
-                      val ind = sp.colPtrs(i) + k
-                      val j = sp.rowIndices(ind)
-                      val offsetRid = offsetD1 + i
-                      val offsetCid = offsetD2 + j
-                      val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, sp.values(ind),
-                        cid2, mat2, blkSize, mergeFunc)
-                      if (join._1) {
-                        val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                        joinRes += insert
-                      }
-                    }
-                  }
-                }
-              case _ => throw new SparkException("Illegal matrix type")
-            }
-          } else {
-            for (i <- 0 until mat1.numRows) {
-              for (j <- 0 until mat1.numCols) {
-                val offsetRid = offsetD1 + i
-                val offsetCid = offsetD2 + j
-                val join = LocalMatrix.UDF_Value_Match_Index2(offsetCid + 1, mat1(i, j),
-                  cid2, mat2, blkSize, mergeFunc)
-                if (join._1) {
-                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
-                  joinRes += insert
-                }
-              }
-            }
-          }
-          joinRes.iterator
-        }
+        joinCidCidExecution(rdd1, rdd2, mergeFunc)
       case _ => throw new SparkException(s"mode not defined, mode=$mode")
     }
     joinRdd.map { elem =>
@@ -2773,6 +2489,204 @@ case class JoinIndexExecution(left: SparkPlan,
       res.setInt(3, b3)
       res.update(4, MLMatrixSerializer.serialize(matrix))
       res
+    }
+  }
+
+  private def joinRidRidExecution(rdd1: RDD[((Int, Int), MLMatrix)],
+                                  rdd2: RDD[((Int, Int), MLMatrix)],
+                                  mergeFunc: (Double, Double) => Double): RDD[((Int, Int, Int, Int), MLMatrix)] = {
+
+    var leftRdd: RDD[((Int, Int), MLMatrix)] = null
+    var rightRdd: RDD[((Int, Int), MLMatrix)] = null
+    val p1 = rdd1.partitioner.getOrElse(null)
+    val p2 = rdd2.partitioner.getOrElse(null)
+    if (p1.isInstanceOf[RowPartitioner] && p2.isInstanceOf[RowPartitioner]
+      && p1.numPartitions == p2.numPartitions) {
+      leftRdd = rdd1
+      rightRdd = rdd2
+    } else { // if rdd1 and rdd2 are not partitioned by rid, then repartition them
+      leftRdd = rdd1.partitionBy(new RowPartitioner(64))
+      rightRdd = rdd2.partitionBy(new RowPartitioner(64))
+    }
+    leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
+      case (iter1, iter2) =>
+        val key2row = new TrieMap[Int, ArrayBuffer[(Int, MLMatrix)]]()
+        val res = new TrieMap[(Int, Int, Int, Int), MLMatrix]()
+        for (elem <- iter1) {
+          val key = elem._1
+          if (!key2row.contains(key._1)) {
+            val row = ArrayBuffer[(Int, MLMatrix)]()
+            row.append((key._2, elem._2))
+            key2row.putIfAbsent(key._1, row)
+          } else {
+            key2row.get(key._1).get.append((key._2, elem._2))
+          }
+        }
+        for (elem <- iter2) {
+          val key = elem._1
+          if (key2row.contains(key._1)) {
+            val d1 = key._1
+            val d3 = key._1
+            val d4 = key._2
+            for (blk <- key2row.get(d1).get) {
+              val d2 = blk._1
+              val tensor = LocalMatrix.joinRidRidBlocks(d1, d2, blk._2, d3, d4, elem._2, mergeFunc)
+              for (t <- tensor) {
+                res.putIfAbsent(t._1, t._2)
+              }
+            }
+          }
+        }
+      res.iterator
+    }
+  }
+
+  private def joinRidCidExecution(rdd1: RDD[((Int, Int), MLMatrix)],
+                                  rdd2: RDD[((Int, Int), MLMatrix)],
+                                  mergeFunc: (Double, Double) => Double): RDD[((Int, Int, Int, Int), MLMatrix)] = {
+
+    var leftRdd: RDD[((Int, Int), MLMatrix)] = null
+    var rightRdd: RDD[((Int, Int), MLMatrix)] = null
+    val p1 = rdd1.partitioner.getOrElse(null)
+    val p2 = rdd2.partitioner.getOrElse(null)
+    if (p1.isInstanceOf[RowPartitioner] && p2.isInstanceOf[ColumnPartitioner]
+      && p1.numPartitions == p2.numPartitions) {
+      leftRdd = rdd1
+      rightRdd = rdd2
+    } else { // partition rdd1 by rid, partition rdd2 by cid
+      leftRdd = rdd1.partitionBy(new RowPartitioner(64))
+      rightRdd = rdd2.partitionBy(new ColumnPartitioner(64))
+    }
+    leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
+      case (iter1, iter2) =>
+        val key2row = new TrieMap[Int, ArrayBuffer[(Int, MLMatrix)]]()
+        val res = new TrieMap[(Int, Int, Int, Int), MLMatrix]()
+        for (elem <- iter1) {
+          val key = elem._1
+          if (!key2row.contains(key._1)) {
+            val row = ArrayBuffer[(Int, MLMatrix)]()
+            row.append((key._2, elem._2))
+            key2row.putIfAbsent(key._1, row)
+          } else {
+            key2row.get(key._1).get.append((key._2, elem._2))
+          }
+        }
+        for (elem <- iter2) {
+          val key = elem._1
+          if (key2row.contains(key._2)) {
+            val d1 = key._2
+            val d3 = key._1
+            val d4 = key._2
+            for (blk <- key2row.get(d1).get) {
+              val d2 = blk._1
+              val tensor = LocalMatrix.joinRidCidBlocks(d1, d2, blk._2, d3, d4, elem._2, mergeFunc)
+              for (t <- tensor) {
+                res.putIfAbsent(t._1, t._2)
+              }
+            }
+          }
+        }
+      res.iterator
+    }
+
+
+  }
+
+  private def joinCidRidExecution(rdd1: RDD[((Int, Int), MLMatrix)],
+                                  rdd2: RDD[((Int, Int), MLMatrix)],
+                                  mergeFunc: (Double, Double) => Double): RDD[((Int, Int, Int, Int), MLMatrix)] = {
+
+    var leftRdd: RDD[((Int, Int), MLMatrix)] = null
+    var rightRdd: RDD[((Int, Int), MLMatrix)] = null
+    val p1 = rdd1.partitioner.getOrElse(null)
+    val p2 = rdd2.partitioner.getOrElse(null)
+    if (p1.isInstanceOf[ColumnPartitioner] && p2.isInstanceOf[RowPartitioner]
+      && p1.numPartitions == p2.numPartitions) {
+      leftRdd = rdd1
+      rightRdd = rdd2
+    } else { // partition rdd1 with cid, partition rdd2 with rid
+      leftRdd = rdd1.partitionBy(new ColumnPartitioner(64))
+      rightRdd = rdd2.partitionBy(new RowPartitioner(64))
+    }
+    leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
+      case (iter1, iter2) =>
+        val key2row = new TrieMap[Int, ArrayBuffer[(Int, MLMatrix)]]()
+        val res = new TrieMap[(Int, Int, Int, Int), MLMatrix]()
+        for (elem <- iter1) {
+          val key = elem._1
+          if (!key2row.contains(key._2)) {
+            val row = ArrayBuffer[(Int, MLMatrix)]()
+            row.append((key._1, elem._2))
+            key2row.putIfAbsent(key._2, row)
+          } else {
+            key2row.get(key._2).get.append((key._1, elem._2))
+          }
+        }
+        for (elem <- iter2) {
+          val key = elem._1
+          if (key2row.contains(key._1)) {
+            val d2 = key._1
+            val d3 = key._1
+            val d4 = key._2
+            for (blk <- key2row.get(d2).get) {
+              val d1 = blk._1
+              val tensor = LocalMatrix.joinCidRidBlocks(d1, d2, blk._2, d3, d4, elem._2, mergeFunc)
+              for (t <- tensor) {
+                res.putIfAbsent(t._1, t._2)
+              }
+            }
+          }
+        }
+        res.iterator
+    }
+  }
+
+  private def joinCidCidExecution(rdd1: RDD[((Int, Int), MLMatrix)],
+                                  rdd2: RDD[((Int, Int), MLMatrix)],
+                                  mergeFunc: (Double, Double) => Double): RDD[((Int, Int, Int, Int), MLMatrix)] = {
+
+    var leftRdd: RDD[((Int, Int), MLMatrix)] = null
+    var rightRdd: RDD[((Int, Int), MLMatrix)] = null
+    val p1 = rdd1.partitioner.getOrElse(null)
+    val p2 = rdd2.partitioner.getOrElse(null)
+    if (p1.isInstanceOf[ColumnPartitioner] && p2.isInstanceOf[ColumnPartitioner]
+      && p1.numPartitions == p2.numPartitions) {
+      leftRdd = rdd1
+      rightRdd = rdd2
+    } else { // partition rdd1 with cid, partition rdd2 with cid
+      leftRdd = rdd1.partitionBy(new ColumnPartitioner(64))
+      rightRdd = rdd2.partitionBy(new ColumnPartitioner(64))
+    }
+    leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
+      case (iter1, iter2) =>
+        val key2row = new TrieMap[Int, ArrayBuffer[(Int, MLMatrix)]]()
+        val res = new TrieMap[(Int, Int, Int, Int), MLMatrix]()
+        for (elem <- iter1) {
+          val key = elem._1
+          if (!key2row.contains(key._2)) {
+            val row = ArrayBuffer[(Int, MLMatrix)]()
+            row.append((key._1, elem._2))
+            key2row.putIfAbsent(key._2, row)
+          } else {
+            key2row.get(key._2).get.append((key._1, elem._2))
+          }
+        }
+        for (elem <- iter2) {
+          val key = elem._1
+          if (key2row.contains(key._2)) {
+            val d2 = key._2
+            val d3 = key._1
+            val d4 = key._2
+            for (blk <- key2row.get(d2).get) {
+              val d1 = blk._1
+              val tensor = LocalMatrix.joinCidCidBlocks(d1, d2, blk._2, d3, d4, elem._2, mergeFunc)
+              for (t <- tensor) {
+                res.putIfAbsent(t._1, t._2)
+              }
+            }
+          }
+        }
+        res.iterator
     }
   }
 }

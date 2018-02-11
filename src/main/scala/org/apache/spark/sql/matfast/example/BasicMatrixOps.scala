@@ -39,11 +39,11 @@ object BasicMatrixOps {
     // runMatrixCount(matfastSession)
     // runMatrixAvg(matfastSession)
     // runMatrixMaxMin(matfastSession)
-     runMatrixJoin(matfastSession)
+    // runMatrixJoin(matfastSession)
     // runMatrixCrossProduct(matfastSession)
     // runMatrixJoinOnValues(matfastSession)
     // runMatrixJoinIndexValue(matfastSession)
-    // runMatrixJoinOnSingleIndex(matfastSession)
+     runMatrixJoinOnSingleIndex(matfastSession)
     matfastSession.stop()
   }
 
@@ -465,9 +465,10 @@ object BasicMatrixOps {
 
     val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
     val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
-    mat1.joinOnSingleIndex(4, 4, mat2, 4, 4, 1,
-      (a: Double, b: Double) => a * b, 2)
-      .groupBy4DTensor(2, (a: Double, b: Double) => a + b).rdd.foreach { row =>
+    mat1.joinOnSingleIndex(4, 4, mat2, 4, 4, 3,
+      (a: Double, b: Double) => a * b, 1)
+      //.groupBy4DTensor(2, (a: Double, b: Double) => a + b)
+      .rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1), row.getInt(2), row.getInt(3))
       // scalastyle:off
       println(idx + ":\n" + row.get(4).asInstanceOf[MLMatrix])

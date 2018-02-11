@@ -1740,6 +1740,171 @@ object LocalMatrix {
       }
     }
   }
+
+  // To do rid1 = rid2 join, mat1's rid1 = mat2's rid2
+  def joinRidRidBlocks(rid1: Int, cid1: Int, mat1: MLMatrix,
+                       rid2: Int, cid2: Int, mat2: MLMatrix,
+                       udf: (Double, Double) => Double): ArrayBuffer[((Int, Int, Int, Int), MLMatrix)] = {
+
+    require(rid1 == rid2, s"rid1 must be equal to rid2, rid1=$rid1, rid2=$rid2")
+    val tensor = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
+    var kIndx = 0
+    for (j <- 0 until mat1.numCols) {
+      // duplicate jth column everywhere in a tmp matrix
+      val key = (rid1, cid1, cid2, kIndx)
+      mat1 match {
+        case den: DenseMatrix =>
+          val arr = new Array[Double](den.values.length)
+          if (!den.isTransposed) {
+            for (i <- 0 until arr.length) {
+              arr(i) = den.values((i % den.numRows) + kIndx * den.numRows)
+            }
+          } else {
+            for (i <- 0 until arr.length) {
+              arr(i) = den.values((i % den.numCols) * den.numCols + kIndx)
+            }
+          }
+          tensor.append((key, LocalMatrix.compute(new DenseMatrix(den.numRows, den.numCols, arr), mat2, udf)))
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) {
+            val cnt = sp.colPtrs(kIndx + 1) - sp.colPtrs(kIndx)
+            val arr = new Array[Double](cnt * sp.numCols)
+            val rowIndx = new Array[Int](arr.length)
+            val colPtrs = new Array[Int](sp.numCols + 1)
+            for (i <- 1 until colPtrs.length) {
+              colPtrs(i) = colPtrs(i - 1) + cnt
+            }
+            for (i <- 0 until arr.length) {
+              val idx = sp.colPtrs(kIndx) + (i % cnt)
+              arr(i) = sp.values(idx)
+              rowIndx(i) = sp.rowIndices(idx)
+            }
+            tensor.append((key, LocalMatrix.compute(new SparseMatrix(sp.numRows, sp.numCols, colPtrs, rowIndx, arr), mat2, udf)))
+          } else {
+            // look for kIndx-th column
+            var cnt = 0
+            val currVal = new ArrayBuffer[Double]()
+            val currRowIdx = new ArrayBuffer[Int]()
+            for (i <- 0 until sp.numRows) {
+              for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                val ind = sp.colPtrs(i) + k
+                if (sp.rowIndices(ind) == kIndx) {
+                  cnt += 1
+                  currVal.append(sp.values(ind))
+                  currRowIdx.append(i)
+                }
+              }
+            }
+            // copy the kIndx-th column multiple times
+            val arr = new Array[Double](cnt * sp.numCols)
+            val rowIndx = new Array[Int](arr.length)
+            val colPtrs = new Array[Int](sp.numCols + 1)
+            for (i <- 1 until colPtrs.length) {
+              colPtrs(i) = colPtrs(i - 1) + cnt
+            }
+            for (i <- 0 until arr.length) {
+              val idx = i % cnt
+              arr(i) = currVal(idx)
+              rowIndx(i) = currRowIdx(idx)
+            }
+            tensor.append((key, LocalMatrix.compute(new SparseMatrix(sp.numRows, sp.numCols, colPtrs, rowIndx, arr), mat2, udf)))
+          }
+        case _ => throw new SparkException("matrix type not supported")
+      }
+      kIndx += 1
+    }
+    tensor
+  }
+
+  // To do cid1 = rid2 join, mat1's cid1 = mat2's rid2
+  def joinCidRidBlocks(rid1: Int, cid1: Int, mat1: MLMatrix,
+                       rid2: Int, cid2: Int, mat2: MLMatrix,
+                       udf: (Double, Double) => Double): ArrayBuffer[((Int, Int, Int, Int), MLMatrix)] = {
+    require(cid1 == rid2, s"cid1 must be equal to rid2, cid1=$cid1, rid2=$rid2")
+    joinRidRidBlocks(cid1, rid1, mat1.transpose, rid2, cid2, mat2, udf)
+  }
+
+  // To do cid1 = cid2 join, mat1's cid1 = mat2's cid2
+  def joinCidCidBlocks(rid1: Int, cid1: Int, mat1: MLMatrix,
+                       rid2: Int, cid2: Int, mat2: MLMatrix,
+                       udf: (Double, Double) => Double): ArrayBuffer[((Int, Int, Int, Int), MLMatrix)] = {
+    require(cid1 == cid2, s"cid1 must be equal to cid2, cid1=$cid1, cid2=$cid2")
+    val tensor = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
+    var kIndx = 0
+    for (i <- 0 until mat1.numRows) {
+      // duplicate ith row everywhere in a tmp matrix
+      val key = (rid1, cid1, rid2, kIndx)
+      mat1 match {
+        case den: DenseMatrix =>
+          val arr = new Array[Double](den.values.length)
+          if (!den.isTransposed) {
+            for (j <- 0 until arr.length) {
+              arr(j) = den.values((j % den.numRows) * den.numRows + kIndx)
+            }
+          } else {
+            for (j <- 0 until arr.length) {
+              arr(j) = den.values((j % den.numCols) + kIndx * den.numCols)
+            }
+          }
+          tensor.append((key, LocalMatrix.compute(new DenseMatrix(den.numRows, den.numCols, arr), mat2, udf)))
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) {
+            // look for kIndx-th row
+            var cnt = 0
+            val currVal = new ArrayBuffer[Double]()
+            val currColIdx = new ArrayBuffer[Int]()
+            for (j <- 0 until sp.numCols) {
+              for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                val ind = sp.colPtrs(j) + k
+                if (sp.rowIndices(ind) == kIndx) {
+                  cnt += 1
+                  currVal.append(sp.values(ind))
+                  currColIdx.append((j))
+                }
+              }
+            }
+            // copy the kIndx-th row multiple times
+            val arr = new Array[Double](cnt * sp.numRows)
+            val colIndx = new Array[Int](arr.length)
+            val rowPtrs = new Array[Int](sp.numRows + 1)
+            for (j <- 1 until rowPtrs.length) {
+              rowPtrs(j) = rowPtrs(j - 1) + cnt
+            }
+            for (j <- 0 until arr.length) {
+              val idx = j % cnt
+              arr(j) = currVal(idx)
+              colIndx(j) = currColIdx(idx)
+            }
+            tensor.append((key, LocalMatrix.compute(new SparseMatrix(sp.numRows, sp.numCols, rowPtrs, colIndx, arr, true), mat2, udf)))
+          } else {
+            val cnt = sp.colPtrs(kIndx + 1) - sp.colPtrs(kIndx)
+            val arr = new Array[Double](cnt * sp.numRows)
+            val colIndx = new Array[Int](arr.length)
+            val rowPtrs = new Array[Int](sp.numRows + 1)
+            for (j <- 1 until rowPtrs.length) {
+              rowPtrs(j) = rowPtrs(j - 1) + cnt
+            }
+            for (j <- 0 until arr.length) {
+              val idx = sp.colPtrs(kIndx) + (j % cnt)
+              arr(j) = sp.values(idx)
+              colIndx(j) = sp.rowIndices(idx)
+            }
+            tensor.append((key, LocalMatrix.compute(new SparseMatrix(sp.numRows, sp.numCols, rowPtrs, colIndx, arr, true), mat2, udf)))
+          }
+        case _ => throw new SparkException("matrix type not found")
+      }
+      kIndx += 1
+    }
+    tensor
+  }
+
+  // To do rid1 = cid2 join, mat1's rid1 = mat2's cid2
+  def joinRidCidBlocks(rid1: Int, cid1: Int, mat1: MLMatrix,
+                       rid2: Int, cid2: Int, mat2: MLMatrix,
+                       udf: (Double, Double) => Double): ArrayBuffer[((Int, Int, Int, Int), MLMatrix)] = {
+    require(rid1 == cid2, s"rid1 must be equal to cid2, rid1=$rid1, cid2=$cid2")
+    joinCidCidBlocks(cid1, rid1, mat1.transpose, rid2, cid2, mat2, udf)
+  }
 }
 
 object TestSparse {

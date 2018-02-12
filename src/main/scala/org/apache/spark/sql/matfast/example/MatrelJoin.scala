@@ -35,7 +35,7 @@ object MatrelJoin {
     val name2 = hdfs + "dataset/" + args(1)
     val savePath = hdfs + "result/"
     val matfastSession = MatfastSession.builder()
-      .appName("Matrel cross-product")
+      .appName("Matrel join single index")
       .master("spark://172.18.11.128:7077")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.shuffle.consolidateFiles", "true")
@@ -92,8 +92,8 @@ object MatrelJoin {
     import spark.MatfastImplicits._
     //mat1.joinOnSingleIndex(dim1, dim1, mat2, dim2, dim2, 1,
     //  (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
-    mat1.joinTwoIndices(dim1, dim1, mat2, dim2, dim2,
-      (x: Double, y: Double) => x * y, 1000, true).rdd.saveAsTextFile(savePath)
+    mat1.joinOnSingleIndex(dim1, dim1, mat2, dim2, dim2, 1,
+      (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
     /*mat1.crossProduct(dim1, dim1, isLeftSparse,
       mat2, dim2, dim2, isRightSparse,
       (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)*/

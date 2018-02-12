@@ -1760,8 +1760,10 @@ object LocalMatrix {
               arr(i) = den.values((i % den.numRows) + kIndx * den.numRows)
             }
           } else {
-            for (i <- 0 until arr.length) {
-              arr(i) = den.values((i % den.numCols) * den.numCols + kIndx)
+            for (i <- 0 until arr.length by den.numRows) {
+              for (d <- 0 until den.numRows) {
+                arr(i + d) = den.values((kIndx % den.numRows) + i)
+              }
             }
           }
           tensor.append((key, LocalMatrix.compute(new DenseMatrix(den.numRows, den.numCols, arr), mat2, udf)))
@@ -1838,8 +1840,10 @@ object LocalMatrix {
         case den: DenseMatrix =>
           val arr = new Array[Double](den.values.length)
           if (!den.isTransposed) {
-            for (j <- 0 until arr.length) {
-              arr(j) = den.values((j % den.numRows) * den.numRows + kIndx)
+            for (j <- 0 until arr.length by den.numCols) {
+              for (d <- 0 until den.numCols) {
+                arr(j + d) = den.values((kIndx % den.numCols) + j)
+              }
             }
           } else {
             for (j <- 0 until arr.length) {

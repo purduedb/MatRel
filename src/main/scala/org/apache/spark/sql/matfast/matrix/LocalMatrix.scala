@@ -120,7 +120,7 @@ object LocalMatrix {
       new DenseMatrix(math.min(ma.numRows, mb.numRows),
         math.min(ma.numCols, mb.numCols), arr)
     } else {
-      if (ma.numRows * ma.numCols <= mb.numRows * mb.numCols) { // sparse matrix input is smaller
+      if (ma.numRows * ma.numCols >= mb.numRows * mb.numCols) { // sparse matrix input is smaller
         val arr = Array.fill(mb.values.length)(0.0)
         if (!mb.isTransposed) {
           for (k <- 0 until mb.numCols) {

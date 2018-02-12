@@ -90,8 +90,6 @@ object MatrelJoin {
     val mat1 = matrixRDD1.toDS()
     val mat2 = matrixRDD2.toDS()
     import spark.MatfastImplicits._
-    //mat1.joinOnSingleIndex(dim1, dim1, mat2, dim2, dim2, 1,
-    //  (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
     mat1.joinOnSingleIndex(dim1, dim1, mat2, dim2, dim2, 1,
       (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
     /*mat1.crossProduct(dim1, dim1, isLeftSparse,

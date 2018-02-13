@@ -485,10 +485,10 @@ object MatrixOperators extends Strategy {
     right, rightRowNum, rightColNum, mode, mergeFunc, blkSize) =>
       JoinIndexValueExecution(planLater(left), leftRowNum, leftColNum,
         planLater(right), rightRowNum, rightColNum, mode, mergeFunc, blkSize) :: Nil
-    case JoinIndexOperator(left, leftRowNum, leftColNum,
-    right, rightRowNum, rightColNum, mode, mergeFunc, blkSize) =>
-      JoinIndexExecution(planLater(left), leftRowNum, leftColNum,
-        planLater(right), rightRowNum, rightColNum, mode, mergeFunc, blkSize) :: Nil
+    case JoinIndexOperator(left, leftRowNum, leftColNum, isLeftSparse,
+    right, rightRowNum, rightColNum, isRightSparse, mode, mergeFunc, blkSize) =>
+      JoinIndexExecution(planLater(left), leftRowNum, leftColNum, isLeftSparse,
+        planLater(right), rightRowNum, rightColNum, isRightSparse, mode, mergeFunc, blkSize) :: Nil
     case GroupBy4DTensorOperator(ch, dims, aggFunc) =>
       GroupBy4DTensorExecution(planLater(ch), dims, aggFunc) :: Nil
     case _ => Nil

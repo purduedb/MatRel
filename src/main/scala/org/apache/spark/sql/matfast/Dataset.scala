@@ -305,16 +305,16 @@ class Dataset[T] private[matfast]
       right.logicalPlan, rightRowNum, rightColNum, mode, mergeFunc, blkSize)
   }
 
-  def joinOnSingleIndex(leftRowNum: Long, leftColNum: Long,
+  def joinOnSingleIndex(leftRowNum: Long, leftColNum: Long, isLeftSparse: Boolean,
                   right: Dataset[_],
-                  rightRowNum: Long, rightColNum: Long,
+                  rightRowNum: Long, rightColNum: Long, isRightSparse: Boolean,
                   mode: Int,
                   mergeFunc: (Double, Double) => Double,
                   blkSize: Int,
                   data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
   = withPlan {
-    JoinIndexOperator(this.logicalPlan, leftRowNum, leftColNum,
-      right.logicalPlan, rightRowNum, rightColNum, mode, mergeFunc, blkSize)
+    JoinIndexOperator(this.logicalPlan, leftRowNum, leftColNum, isLeftSparse,
+      right.logicalPlan, rightRowNum, rightColNum, isRightSparse, mode, mergeFunc, blkSize)
   }
 
   def groupBy4DTensor(dims: Int, aggFunc: (Double, Double) => Double,

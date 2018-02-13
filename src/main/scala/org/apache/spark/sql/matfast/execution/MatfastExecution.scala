@@ -2433,9 +2433,11 @@ case class JoinIndexValueExecution(left: SparkPlan,
 case class JoinIndexExecution(left: SparkPlan,
                               leftRowNum: Long,
                               leftColNum: Long,
+                              isLeftSparse: Boolean,
                               right: SparkPlan,
                               rightRowNum: Long,
                               rightColNum: Long,
+                              isRightSparse: Boolean,
                               mode: Int,
                               mergeFunc: (Double, Double) => Double,
                               blkSize: Int) extends MatfastPlan {
@@ -2464,16 +2466,40 @@ case class JoinIndexExecution(left: SparkPlan,
       val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
       ((rid, cid), matrix)
     }
-
+    val swapMergeFunc = (x: Double, y: Double) => mergeFunc(y, x)
     val joinRdd = mode match {
       case 1 => // iA = iB
-        joinRidRidExecution(rdd1, rdd2, mergeFunc)
+        if (isLeftSparse) {
+          joinRidRidExecution(rdd1, rdd2, mergeFunc)
+        } else if (isRightSparse) {
+          joinRidRidExecution(rdd2, rdd1, swapMergeFunc)
+        } else {
+          joinRidRidExecution(rdd1, rdd2, mergeFunc)
+        }
       case 2 => // iA = jB
-        joinRidCidExecution(rdd1, rdd2, mergeFunc)
+        if (isLeftSparse) {
+          joinRidCidExecution(rdd1, rdd2, mergeFunc)
+        } else if (isRightSparse) {
+          joinRidCidExecution(rdd2, rdd1, swapMergeFunc)
+        } else {
+          joinRidCidExecution(rdd1, rdd2, mergeFunc)
+        }
       case 3 => // jA = iB
-        joinCidRidExecution(rdd1, rdd2, mergeFunc)
+        if (isLeftSparse) {
+          joinCidRidExecution(rdd1, rdd2, mergeFunc)
+        } else if (isRightSparse) {
+          joinCidRidExecution(rdd2, rdd1, swapMergeFunc)
+        } else {
+          joinCidRidExecution(rdd1, rdd2, mergeFunc)
+        }
       case 4 => // jA = jB
-        joinCidCidExecution(rdd1, rdd2, mergeFunc)
+        if (isLeftSparse) {
+          joinCidCidExecution(rdd1, rdd2, mergeFunc)
+        } else if (isRightSparse) {
+          joinCidCidExecution(rdd2, rdd2, swapMergeFunc)
+        } else {
+          joinCidCidExecution(rdd1, rdd2, mergeFunc)
+        }
       case _ => throw new SparkException(s"mode not defined, mode=$mode")
     }
     joinRdd.map { elem =>
@@ -2505,8 +2531,8 @@ case class JoinIndexExecution(left: SparkPlan,
       leftRdd = rdd1
       rightRdd = rdd2
     } else { // if rdd1 and rdd2 are not partitioned by rid, then repartition them
-      leftRdd = rdd1.partitionBy(new RowPartitioner(64))
-      rightRdd = rdd2.partitionBy(new RowPartitioner(64))
+      leftRdd = rdd1.partitionBy(new RowPartitioner(128))
+      rightRdd = rdd2.partitionBy(new RowPartitioner(128))
     }
     leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
       case (iter1, iter2) =>
@@ -2554,8 +2580,8 @@ case class JoinIndexExecution(left: SparkPlan,
       leftRdd = rdd1
       rightRdd = rdd2
     } else { // partition rdd1 by rid, partition rdd2 by cid
-      leftRdd = rdd1.partitionBy(new RowPartitioner(64))
-      rightRdd = rdd2.partitionBy(new ColumnPartitioner(64))
+      leftRdd = rdd1.partitionBy(new RowPartitioner(128))
+      rightRdd = rdd2.partitionBy(new ColumnPartitioner(128))
     }
     leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
       case (iter1, iter2) =>
@@ -2605,8 +2631,8 @@ case class JoinIndexExecution(left: SparkPlan,
       leftRdd = rdd1
       rightRdd = rdd2
     } else { // partition rdd1 with cid, partition rdd2 with rid
-      leftRdd = rdd1.partitionBy(new ColumnPartitioner(64))
-      rightRdd = rdd2.partitionBy(new RowPartitioner(64))
+      leftRdd = rdd1.partitionBy(new ColumnPartitioner(128))
+      rightRdd = rdd2.partitionBy(new RowPartitioner(128))
     }
     leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
       case (iter1, iter2) =>
@@ -2654,8 +2680,8 @@ case class JoinIndexExecution(left: SparkPlan,
       leftRdd = rdd1
       rightRdd = rdd2
     } else { // partition rdd1 with cid, partition rdd2 with cid
-      leftRdd = rdd1.partitionBy(new ColumnPartitioner(64))
-      rightRdd = rdd2.partitionBy(new ColumnPartitioner(64))
+      leftRdd = rdd1.partitionBy(new ColumnPartitioner(128))
+      rightRdd = rdd2.partitionBy(new ColumnPartitioner(128))
     }
     leftRdd.zipPartitions(rightRdd, preservesPartitioning = true) {
       case (iter1, iter2) =>

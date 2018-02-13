@@ -407,8 +407,11 @@ case class DenseMatrix @Since("1.3.0")(
   }
 
   override def bloomFilter: BloomFilter[Double] = {
-    val bloom: BloomFilter[Double] = new FilterBuilder().
-      expectedElements(1000000).hashFunction(HashMethod.Murmur3).buildBloomFilter()
+    val bloom: BloomFilter[Double] = new FilterBuilder()
+      .expectedElements(1000000)
+      .size(10000)
+      .hashFunction(HashMethod.Murmur3)
+      .buildBloomFilter()
     for (x <- values) {
       if (math.abs(x - 0.0) > 1e-6) {
         bloom.add(x)
@@ -752,12 +755,15 @@ case class SparseMatrix @Since("1.3.0")(
   }
 
   override def bloomFilter: BloomFilter[Double] = {
-    val bloom: BloomFilter[Double] = new FilterBuilder().
-      expectedElements(1000000).hashFunction(HashMethod.Murmur3).buildBloomFilter()
+    val bloom: BloomFilter[Double] = new FilterBuilder()
+      .expectedElements(1000000)
+      .size(10000)
+      .hashFunction(HashMethod.Murmur3)
+      .buildBloomFilter()
     for (x <- values) {
       bloom.add(x)
     }
-    bloom
+    bloom.intersect()
   }
 
   override def cell2Index: Multimap[Double, (Int, Int)] = {

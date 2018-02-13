@@ -35,7 +35,7 @@ object MatrelJoin {
     val name2 = hdfs + "dataset/" + args(1)
     val savePath = hdfs + "result/"
     val matfastSession = MatfastSession.builder()
-      .appName("Matrel join single index")
+      .appName("Matrel join values")
       .master("spark://172.18.11.128:7077")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.shuffle.consolidateFiles", "true")
@@ -90,7 +90,9 @@ object MatrelJoin {
     val mat1 = matrixRDD1.toDS()
     val mat2 = matrixRDD2.toDS()
     import spark.MatfastImplicits._
-    mat1.joinOnSingleIndex(dim1, dim1, mat2, dim2, dim2, 1,
+    //mat1.joinOnSingleIndex(dim1, dim1, isLeftSparse, mat2, dim2, dim2, isRightSparse, 3,
+    //  (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
+    mat1.joinOnValues(dim1, dim1, mat2, dim2, dim2,
       (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
     /*mat1.crossProduct(dim1, dim1, isLeftSparse,
       mat2, dim2, dim2, isRightSparse,
@@ -114,7 +116,7 @@ object MatrelJoin {
     //val blk_num = math.ceil(dim * 1.0 / blkSize).toInt
     //val blkCyclic = new BlockCyclicPartitioner(blk_num, blk_num, blkSize, blkSize)
     //val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize).partitionBy(blkCyclic)
-    val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize).partitionBy(new RowPartitioner(100))
+    val blkRDD = coordinateMatrix.toBlockMatrixRDD(blkSize)//.partitionBy(new RowPartitioner(100))
     val rdd = blkRDD.map (x => MatrixBlock(x._1._1, x._1._2, x._2))
     (dim, rdd)
   }
@@ -128,7 +130,7 @@ object MatrelJoin {
     //val blk_num = math.ceil(dim * 1.0 / blkSize).toInt
     //val blkCyclic = new BlockCyclicPartitioner(blk_num, blk_num, blkSize, blkSize)
     //val rdd = dimRdd._2.partitionBy(blkCyclic)
-    val rdd = dimRdd._2.partitionBy(new RowPartitioner(100))
+    val rdd = dimRdd._2//.partitionBy(new RowPartitioner(100))
       .map(x => MatrixBlock(x._1._1, x._1._2, x._2))
     (dim, rdd)
   }

@@ -191,7 +191,7 @@ object MatfastExecutionHelper {
       val res = new GenericInternalRow(3)
       res.setInt(0, rid)
       res.setInt(1, cid)
-      res.update(3, MLMatrixSerializer.serialize(matrix))
+      res.update(2, MLMatrixSerializer.serialize(matrix))
       res
     }
   }

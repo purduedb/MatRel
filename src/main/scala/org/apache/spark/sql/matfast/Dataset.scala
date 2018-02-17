@@ -65,6 +65,31 @@ class Dataset[T] private[matfast]
     TransposeOperator(this.logicalPlan)
   }
 
+  def elementUDF(udf: Double => Double,
+                 data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    MatrixElementUDFOperator(this.logicalPlan, udf)
+  }
+
+  def MatrixColumnVectorDivide(leftRowNum: Long, leftColNum: Long,
+                               right: Dataset[_],
+                               rightRowNum: Long, rightColNum: Long,
+                               blkSize: Int,
+                               data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    require(rightColNum == 1, s"left vector must be a column vector, #cols = $rightColNum")
+    require(leftRowNum == rightRowNum, s"row numbers must be equal, leftRowNum=$leftRowNum, rightRowNum=$rightRowNum")
+    MatrixDivideColumnVector(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+  }
+
+  def MatrixRowVectorDivide(leftRowNum: Long, leftColNum: Long,
+                            right: Dataset[_],
+                            rightRowNum: Long, rightColNum: Long,
+                            blkSize: Int,
+                            data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
+    require(rightRowNum == 1, s"left vector must be a row vector, #rows = $rightRowNum")
+    require(leftColNum == rightColNum, s"col numbers must be equal, leftColNum=$leftColNum, rightColNum=$rightColNum")
+    MatrixDivideRowVector(this.logicalPlan, leftRowNum, leftColNum, right.logicalPlan, rightRowNum, rightColNum, blkSize)
+  }
+
   def rowSum(nrows: Long, ncols: Long,
              data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame = withPlan {
     RowSumOperator(this.logicalPlan, nrows, ncols)
@@ -282,15 +307,15 @@ class Dataset[T] private[matfast]
       right.logicalPlan, rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize)
   }
 
-  def joinOnValues(leftRowNum: Long, leftColNum: Long,
+  def joinOnValues(leftRowNum: Long, leftColNum: Long, isLeftSparse: Boolean,
                    right: Dataset[_],
-                   rightRowNum: Long, rightColNum: Long,
+                   rightRowNum: Long, rightColNum: Long, isRightSparse: Boolean,
                    mergeFunc: (Double, Double) => Double,
                    blkSize: Int,
                    data: Seq[Attribute] = this.queryExecution.analyzed.output): DataFrame
   = withPlan {
-    JoinOnValuesOperator(this.logicalPlan, leftRowNum, leftColNum,
-      right.logicalPlan, rightRowNum, rightColNum, mergeFunc, blkSize)
+    JoinOnValuesOperator(this.logicalPlan, leftRowNum, leftColNum, isLeftSparse,
+      right.logicalPlan, rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize)
   }
 
   def joinIndexValue(leftRowNum: Long, leftColNum: Long,

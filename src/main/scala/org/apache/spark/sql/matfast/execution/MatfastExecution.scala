@@ -23,6 +23,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, ExprId, GenericInternalRow}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.matfast.matrix._
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, RowPartitioner}
@@ -1952,9 +1953,11 @@ case class CrossProductExecution(left: SparkPlan,
 case class JoinOnValuesExecution(left: SparkPlan,
                                  leftRowNum: Long,
                                  leftColNum: Long,
+                                 isLeftSparse: Boolean,
                                  right: SparkPlan,
                                  rightRowNum: Long,
                                  rightColNum: Long,
+                                 isRightSparse: Boolean,
                                  mergeFunc: (Double, Double) => Double,
                                  blkSize: Int) extends MatfastPlan {
 
@@ -1969,20 +1972,37 @@ case class JoinOnValuesExecution(left: SparkPlan,
   override def children: Seq[SparkPlan] = Seq(left, right)
 
   protected override def doExecute(): RDD[InternalRow] = {
-    val rdd1 = left.execute().map { row =>
-      val rid = row.getInt(0)
-      val cid = row.getInt(1)
-      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
-      ((rid, cid), matrix)
+    if (isLeftSparse && !isRightSparse) {
+      MatfastExecutionHelper
+        .joinOnValuesDuplicateLeft(left.execute(), right.execute(), mergeFunc, blkSize)
+    } else if (!isLeftSparse && isRightSparse) {
+      MatfastExecutionHelper
+        .joinOnValuesDuplicateRight(left.execute(), right.execute(), mergeFunc, blkSize)
+    } else {
+      val rdd1 = left.execute().map { row =>
+        val rid = row.getInt(0)
+        val cid = row.getInt(1)
+        val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+        matrix match {
+          case den: DenseMatrix => den.bloomFilter
+          case sp: SparseMatrix => sp.bloomFilter
+          case _ => throw new SparkException("matrix type not supported")
+        }
+        ((rid, cid), matrix)
+      }
+      val rdd2 = right.execute().map { row =>
+        val rid = row.getInt(0)
+        val cid = row.getInt(1)
+        val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+        matrix match {
+          case den: DenseMatrix => den.bloomFilter
+          case sp: SparseMatrix => sp.bloomFilter
+          case _ => throw new SparkException("matrix type not supported")
+        }
+        ((rid, cid), matrix)
+      }
+      computeJoinOnValues(rdd1, rdd2, mergeFunc)
     }
-
-    val rdd2 = right.execute().map { row =>
-      val rid = row.getInt(0)
-      val cid = row.getInt(1)
-      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
-      ((rid, cid), matrix)
-    }
-    computeJoinOnValues(rdd1, rdd2, mergeFunc)
   }
 
   def computeJoinOnValues(rdd1: RDD[((Int, Int), MLMatrix)],
@@ -2002,7 +2022,7 @@ case class JoinOnValuesExecution(left: SparkPlan,
                   if (math.abs(den(i, j) - 0.0) > 1e-6) {
                     val offsetRid = offsetD1 + i
                     val offsetCid = offsetD2 + j
-                    val join = LocalMatrix.UDF_Element_Match(-1, den(i, j), mat2, udf)
+                    val join = LocalMatrix.UDF_Cell_Match(den(i, j), mat2, udf)
                     if (join._1) {
                       val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                       joinRes += insert
@@ -2019,7 +2039,7 @@ case class JoinOnValuesExecution(left: SparkPlan,
                     val i = sp.rowIndices(ind)
                     val offsetRid = offsetD1 + i
                     val offsetCid = offsetD2 + j
-                    val join = LocalMatrix.UDF_Element_Match(-1, sp.values(ind), mat2, udf)
+                    val join = LocalMatrix.UDF_Cell_Match(sp.values(ind), mat2, udf)
                     if (join._1) {
                       val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                       joinRes += insert
@@ -2034,7 +2054,7 @@ case class JoinOnValuesExecution(left: SparkPlan,
                     val j = sp.rowIndices(ind)
                     val offsetRid = offsetD1 + i
                     val offsetCid = offsetD2 + j
-                    val join = LocalMatrix.UDF_Element_Match(-1, sp.values(ind), mat2, udf)
+                    val join = LocalMatrix.UDF_Cell_Match(sp.values(ind), mat2, udf)
                     if (join._1) {
                       val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                       joinRes += insert
@@ -2050,7 +2070,7 @@ case class JoinOnValuesExecution(left: SparkPlan,
             for (j <- 0 until mat1.numCols) {
               val offsetRid = offsetD1 + i
               val offsetCid = offsetD2 + j
-              val join = LocalMatrix.UDF_Element_Match(-1, mat1(i, j), mat2, udf)
+              val join = LocalMatrix.UDF_Cell_Match(mat1(i, j), mat2, udf)
               if (join._1) {
                 val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
                 joinRes += insert
@@ -2518,7 +2538,27 @@ case class JoinIndexExecution(left: SparkPlan,
     }
   }
 
-  private def joinRidRidExecution(rdd1: RDD[((Int, Int), MLMatrix)],
+  /*private def joinCidRidGroupKey(rdd1: RDD[((Int, Int), MLMatrix)],
+                                  rdd2: RDD[((Int, Int), MLMatrix)],
+                                  mergeFunc: (Double, Double) => Double): RDD[((Int, Int, Int, Int), MLMatrix)] = {
+
+    val left = rdd1.map{ x =>
+      (x._1._2, x)
+    }.groupByKey()
+    val right = rdd2.map{ x =>
+      (x._1._1, x)
+    }.groupByKey()
+    left.join(right).flatMap { case (id, (iter1, iter2)) =>
+        val buffer = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
+        for (x <- iter1; y <- iter2) {
+          val tensor = LocalMatrix.joinCidRidBlocks(x._1._1, x._1._2, x._2,
+            y._1._1, y._1._2, y._2, mergeFunc)
+          for (t <- tensor) buffer.append(t)
+        }
+        buffer.iterator
+    }
+  }*/
+    private def joinRidRidExecution(rdd1: RDD[((Int, Int), MLMatrix)],
                                   rdd2: RDD[((Int, Int), MLMatrix)],
                                   mergeFunc: (Double, Double) => Double): RDD[((Int, Int, Int, Int), MLMatrix)] = {
 
@@ -2774,6 +2814,191 @@ case class GroupBy4DTensorExecution(child: SparkPlan,
               res
             }
       case _ => throw new SparkException(s"Unsupported dims parameter, dims=$dims")
+    }
+  }
+}
+
+case class MatrixElementUDFExecution(child: SparkPlan,
+                                     udf: Double => Double) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = child.output
+
+  override def children: Seq[SparkPlan] = child :: Nil
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd = child.execute()
+    rdd.map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val matrix = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      val mat = matrix match {
+        case den: DenseMatrix =>
+          val values = den.values.clone()
+          for (i <- 0 until values.length) {
+            values(i) = udf(values(i))
+          }
+          new DenseMatrix(den.numRows, den.numCols, values, den.isTransposed)
+        case sp: SparseMatrix =>
+          val values = sp.values.clone()
+          for (i <- 0 until values.length) {
+            values(i) = udf(values(i))
+          }
+          new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, values, sp.isTransposed)
+        case _ => throw new SparkException("matrix type not supported")
+      }
+      val res = new GenericInternalRow(3)
+      res.setInt(0, rid)
+      res.setInt(1, cid)
+      res.update(2, MLMatrixSerializer.serialize(mat))
+      res
+    }
+  }
+}
+
+case class MatrixDivideColumnVectorExecution(leftChild: SparkPlan,
+                                             leftRowNum: Long,
+                                             leftColNum: Long,
+                                             rightChild: SparkPlan,
+                                             rightRowNum: Long,
+                                             rightColNum: Long,
+                                             blkSize: Int) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = leftChild.output
+
+  override def children: Seq[SparkPlan] = Seq(leftChild, rightChild)
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd1 = leftChild.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val mat = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      (rid, (cid, mat))
+    }
+    val rdd2 = rightChild.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val mat = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      (rid, (cid, mat))
+    }
+    rdd1.join(rdd2).map { case (rid, ((cid1, mat1), (cid2, mat2))) =>
+      val vector = mat2.toArray
+      mat1 match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) {
+            val values = den.values.clone()
+            for (i <- 0 until values.length) {
+              values(i) = values(i) / vector(i % den.numRows)
+            }
+            ((rid, cid1), new DenseMatrix(den.numRows, den.numCols, values, den.isTransposed))
+          } else {
+            val values = den.values.clone()
+            for (i <- 0 until values.length) {
+              values(i) = values(i) / vector(i / den.numCols)
+            }
+            ((rid, cid1), new DenseMatrix(den.numRows, den.numCols, values, den.isTransposed))
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) {
+            val values = sp.values.clone()
+            for (j <- 0 until sp.numCols) {
+              for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                val ind = sp.colPtrs(j) + k
+                values(ind) = values(ind) / vector(sp.rowIndices(ind))
+              }
+            }
+            ((rid, cid1), new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, values, sp.isTransposed))
+          } else {
+            val values = sp.values.clone()
+            for (i <- 0 until sp.numRows) {
+              for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                val ind = sp.colPtrs(i) + k
+                values(ind) = values(ind) / vector(i)
+              }
+            }
+            ((rid, cid1), new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, values, sp.isTransposed))
+          }
+        case _ => throw new SparkException("matrix type not supported")
+      }
+    }.map { row =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, row._1._1)
+      res.setInt(1, row._1._2)
+      res.update(2, MLMatrixSerializer.serialize(row._2))
+      res
+    }
+  }
+}
+
+case class MatrixDivideRowVectorExecution(leftChild: SparkPlan,
+                                             leftRowNum: Long,
+                                             leftColNum: Long,
+                                             rightChild: SparkPlan,
+                                             rightRowNum: Long,
+                                             rightColNum: Long,
+                                             blkSize: Int) extends MatfastPlan {
+
+  override def output: Seq[Attribute] = leftChild.output
+
+  override def children: Seq[SparkPlan] = Seq(leftChild, rightChild)
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    val rdd1 = leftChild.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val mat = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      (rid, (cid, mat))
+    }
+    val rdd2 = rightChild.execute().map { row =>
+      val rid = row.getInt(0)
+      val cid = row.getInt(1)
+      val mat = MLMatrixSerializer.deserialize(row.getStruct(2, 7))
+      (rid, (cid, mat))
+    }
+    rdd1.join(rdd2).map { case (rid, ((cid1, mat1), (cid2, mat2))) =>
+      val vector = mat2.toArray
+      mat1 match {
+        case den: DenseMatrix =>
+          if (!den.isTransposed) {
+            val values = den.values.clone()
+            for (i <- 0 until values.length) {
+              values(i) = values(i) / vector(i / den.numRows)
+            }
+            ((rid, cid1), new DenseMatrix(den.numRows, den.numCols, values, den.isTransposed))
+          } else {
+            val values = den.values.clone()
+            for (i <- 0 until values.length) {
+              values(i) = values(i) / vector(i % den.numCols)
+            }
+            ((rid, cid1), new DenseMatrix(den.numRows, den.numCols, values, den.isTransposed))
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) {
+            val values = sp.values.clone()
+            for (j <- 0 until sp.numCols) {
+              for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                val ind = sp.colPtrs(j) + k
+                values(ind) = values(ind) / vector(j)
+              }
+            }
+            ((rid, cid1), new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, values, sp.isTransposed))
+          } else {
+            val values = sp.values.clone()
+            for (i <- 0 until sp.numRows) {
+              for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+                val ind = sp.colPtrs(i) + k
+                values(ind) = values(ind) / vector(sp.rowIndices(ind))
+              }
+            }
+            ((rid, cid1), new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, values, sp.isTransposed))
+          }
+        case _ => throw new SparkException("matrix type not supported")
+      }
+    }.map { row =>
+      val res = new GenericInternalRow(3)
+      res.setInt(0, row._1._1)
+      res.setInt(1, row._1._2)
+      res.update(2, MLMatrixSerializer.serialize(row._2))
+      res
     }
   }
 }

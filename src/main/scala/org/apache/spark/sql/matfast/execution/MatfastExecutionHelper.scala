@@ -19,14 +19,15 @@ package org.apache.spark.sql.matfast.execution
 
 import scala.collection.concurrent.TrieMap
 import scala.util.control.Breaks._
-
 import org.apache.spark.{Partitioner, SparkException}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
-import org.apache.spark.sql.matfast.matrix._
+import org.apache.spark.sql.matfast.matrix.{MLMatrix, _}
 import org.apache.spark.sql.matfast.partitioner.{BlockCyclicPartitioner, ColumnPartitioner, IndexPartitioner, RowPartitioner}
 import org.apache.spark.sql.matfast.util.MLMatrixSerializer
+
+import scala.collection.mutable.ArrayBuffer
 
 object MatfastExecutionHelper {
 
@@ -649,5 +650,143 @@ object MatfastExecutionHelper {
       res.update(2, MLMatrixSerializer.serialize(mat))
       res
     }
+  }
+
+  def joinOnValuesDuplicateLeft(rdd1: RDD[InternalRow],
+                                rdd2: RDD[InternalRow],
+                                udf: (Double, Double) => Double,
+                                blkSize: Int): RDD[InternalRow] = {
+
+    val numPartitions = rdd2.partitions.length
+    val rightRdd = repartitionWithTargetPartitioner(new ColumnPartitioner(numPartitions), rdd2)
+    val dupRdd = duplicateCrossPartitions(rdd1, numPartitions)
+    dupRdd.zipPartitions(rightRdd, preservesPartitioning = true) { (iter1, iter2) =>
+      val dup = iter1.next()._2
+      for {
+        x2 <- iter2
+        x1 <- dup
+      } yield (computeJoinValues(x1.rid, x1.cid, x1.matrix,
+        x2._1._1, x2._1._2, MLMatrixSerializer.deserialize(x2._2), udf, blkSize))
+    }.flatMap(_.iterator)
+      .map { row =>
+        val d1 = row._1._1
+        val d2 = row._1._2
+        val d3 = row._1._3
+        val d4 = row._1._4
+        val matrix = row._2
+        val res = new GenericInternalRow(5)
+        res.setInt(0, d1)
+        res.setInt(1, d2)
+        res.setInt(2, d3)
+        res.setInt(3, d4)
+        res.update(4, MLMatrixSerializer.serialize(matrix))
+        res
+      }
+  }
+
+  def joinOnValuesDuplicateRight(rdd1: RDD[InternalRow],
+                                 rdd2: RDD[InternalRow],
+                                 udf: (Double, Double) => Double,
+                                 blkSize: Int): RDD[InternalRow] = {
+
+    val numPartitions = rdd1.partitions.length
+    val leftRdd = repartitionWithTargetPartitioner(new RowPartitioner(numPartitions), rdd1)
+    val dupRdd = duplicateCrossPartitions(rdd2, numPartitions)
+    leftRdd.zipPartitions(dupRdd, preservesPartitioning = true) { (iter1, iter2) =>
+      val dup = iter2.next()._2
+      for {
+        x1 <- iter1
+        x2 <- dup
+      } yield (computeJoinValues(x1._1._1, x1._1._2, MLMatrixSerializer.deserialize(x1._2),
+        x2.rid, x2.cid, x2.matrix, udf, blkSize))
+    }.flatMap(_.iterator)
+      .map { row =>
+        val d1 = row._1._1
+        val d2 = row._1._2
+        val d3 = row._1._3
+        val d4 = row._1._4
+        val matrix = row._2
+        val res = new GenericInternalRow(5)
+        res.setInt(0, d1)
+        res.setInt(1, d2)
+        res.setInt(2, d3)
+        res.setInt(3, d4)
+        res.update(4, MLMatrixSerializer.serialize(matrix))
+        res
+      }
+  }
+
+
+  def computeJoinValues(rid1: Int, cid1: Int, mat1: MLMatrix,
+                        rid2: Int, cid2: Int, mat2: MLMatrix,
+                        udf: (Double, Double) => Double,
+                        blkSize: Int): ArrayBuffer[((Int, Int, Int, Int), MLMatrix)] = {
+
+    val offsetD1: Int = rid1 * blkSize
+    val offsetD2: Int = cid1 * blkSize
+    val joinRes = new ArrayBuffer[((Int, Int, Int, Int), MLMatrix)]()
+    val rand = new scala.util.Random()
+    if (math.abs(udf(0.0, rand.nextDouble()) - 0.0) < 1e-6) {
+      mat1 match {
+        case den: DenseMatrix =>
+          for (i <- 0 until den.numRows) {
+            for (j <- 0 until den.numCols) {
+              if (math.abs(den(i, j) - 0.0) > 1e-6) {
+                val offsetRid = offsetD1 + i
+                val offsetCid = offsetD2 + j
+                val join = LocalMatrix.UDF_Cell_Match(den(i, j), mat2, udf)
+                if (join._1) {
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                  joinRes += insert
+                }
+              }
+            }
+          }
+        case sp: SparseMatrix =>
+          if (!sp.isTransposed) { // CSC format
+            for (j <- 0 until sp.numCols) {
+              for (k <- 0 until sp.colPtrs(j + 1) - sp.colPtrs(j)) {
+                val ind = sp.colPtrs(j) + k
+                val i = sp.rowIndices(ind)
+                val offsetRid = offsetD1 + i
+                val offsetCid = offsetD2 + j
+                val join = LocalMatrix.UDF_Cell_Match(sp.values(ind), mat2, udf)
+                if (join._1) {
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                  joinRes += insert
+                }
+              }
+            }
+          } else { // CSR format
+            for (i <- 0 until sp.numRows) {
+              for (k <- 0 until sp.colPtrs(i + 1) - sp.colPtrs(i)) {
+               val ind = sp.colPtrs(i) + k
+                val j = sp.rowIndices(ind)
+                val offsetRid = offsetD1 + i
+                val offsetCid = offsetD2 + j
+                val join = LocalMatrix.UDF_Cell_Match(sp.values(ind), mat2, udf)
+                if (join._1) {
+                  val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+                  joinRes += insert
+                }
+              }
+            }
+          }
+        case _ => throw new SparkException("Illegal matrix type")
+      }
+    } else {
+      for (i <- 0 until mat1.numRows) {
+        for (j <- 0 until mat1.numCols) {
+          val offsetRid = offsetD1 + i
+          val offsetCid = offsetD2 + j
+          val join = LocalMatrix.UDF_Cell_Match(mat1(i, j), mat2, udf)
+          if (join._1) {
+            val insert = ((offsetRid, offsetCid, rid2, cid2), join._2)
+            joinRes += insert
+          }
+        }
+      }
+    }
+    joinRes
   }
 }

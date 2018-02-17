@@ -18,7 +18,7 @@
 package org.apache.spark.sql.matfast.matrix
 
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
-
+import orestes.bloomfilter.BloomFilter
 import org.apache.spark.mllib.linalg.{DenseMatrix => SparkDense, Matrix => SparkMatrix, SparseMatrix => SparkSparse}
 import org.apache.spark.SparkException
 
@@ -1344,13 +1344,13 @@ object LocalMatrix {
     if (math.abs(udf(rand.nextDouble(), 0.0) - 0.0) < 1e-6) { // preserving sparsity of the input
       mat match {
         case den: DenseMatrix =>
-          val v = den.values
+          val v = den.values.clone()
           for (i <- 0 until v.length) {
             v(i) = udf(x, v(i))
           }
           new DenseMatrix(den.numRows, den.numCols, v, den.isTransposed)
         case sp: SparseMatrix =>
-          val v = sp.values
+          val v = sp.values.clone()
           for (i <- 0 until v.length) {
             v(i) = udf(x, v(i))
           }
@@ -1369,6 +1369,69 @@ object LocalMatrix {
         new DenseMatrix(mat.numRows, mat.numCols, v)
       } else {
         new DenseMatrix(mat.numRows, mat.numCols, v).toSparse
+      }
+    }
+  }
+
+  def UDF_Cell_Match(x: Double, mat: MLMatrix, udf: (Double, Double) => Double): (Boolean, MLMatrix) = {
+    val bloom: BloomFilter[Double] = mat match {
+      case den: DenseMatrix => den.bloomFilter
+      case sp: SparseMatrix => sp.bloomFilter
+      case _ => throw new SparkException("matrix type not supported")
+    }
+    if (!bloom.contains(x)) {
+      (false, null)
+    } else {
+      val rand = new scala.util.Random()
+      if (math.abs(udf(rand.nextDouble(), 0.0) - 0.0) < 1e-6) { // preserving sparsity of the input
+        mat match {
+          case den: DenseMatrix =>
+            val original = den.values
+            var nnz = 0
+            val v = Array.fill[Double](original.length)(0.0)
+            for (i <- 0 until v.length) {
+              if (x == original(i)) {
+                v(i) = udf(x, x)
+                nnz += 1
+              }
+            }
+            if (nnz == 0) { (false, null) }
+            else {
+              if (nnz >= 0.5 * mat.numRows * mat.numCols) {
+                (true, new DenseMatrix(den.numRows, den.numCols, v, den.isTransposed))
+              } else {
+                (true, (new DenseMatrix(den.numRows, den.numCols, v, den.isTransposed)).toSparse)
+              }
+            }
+          case sp: SparseMatrix =>
+            val original = sp.values
+            val v = Array.fill[Double](original.length)(0.0)
+            for (i <- 0 until v.length) {
+              if (x == original(i)) {
+                v(i) = udf(x, x)
+              }
+            }
+            (true, new SparseMatrix(sp.numRows, sp.numCols, sp.colPtrs, sp.rowIndices, v, sp.isTransposed))
+          case _ => throw new SparkException("Illegal matrix type")
+        }
+      } else { // not preserving sparsity of the input
+        val arr = mat.toArray
+        val v = Array.fill[Double](arr.length)(0.0)
+        var nnz = 0
+        for (i <- 0 until v.length) {
+          if (x == arr(i)) {
+            v(i) = udf(x, x)
+            if (v(i) != 0) nnz += 1
+          }
+        }
+        if (nnz == 0) { (false, null) }
+        else {
+          if (nnz > 0.5 * mat.numRows * mat.numCols) {
+            (true, new DenseMatrix(mat.numRows, mat.numCols, v))
+          } else {
+            (true, (new DenseMatrix(mat.numRows, mat.numCols, v)).toSparse)
+          }
+        }
       }
     }
   }
@@ -1464,7 +1527,11 @@ object LocalMatrix {
         case _ => throw new SparkException("Illegal matrix type")
       }
     } else {
-      val bloom = mat.bloomFilter
+      val bloom: BloomFilter[Double]  = mat match {
+        case den: DenseMatrix => den.bloomFilter
+        case sp: SparseMatrix => sp.bloomFilter
+        case _ => throw new SparkException("matrix type not supported")
+      }
       if (ind < 0 && !bloom.contains(cell)) {
         (false, null)
       } else if (ind > 0 && !bloom.contains(ind)) {

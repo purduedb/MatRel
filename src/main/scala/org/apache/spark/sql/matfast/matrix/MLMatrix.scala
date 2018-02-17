@@ -172,9 +172,9 @@ abstract class MLMatrix extends Serializable {
   // bloomFilter is used for fasting pruning
   // cell2Index is used for accessing the indices faster
 
-  def bloomFilter: BloomFilter[Double]
+  // def bloomFilter: BloomFilter[Double]
 
-  def cell2Index: Multimap[Double, (Int, Int)]
+  // def cell2Index: Multimap[Double, (Int, Int)]
 }
 
 private[matfast] class MatrixUDT extends UserDefinedType[MLMatrix] {
@@ -406,7 +406,7 @@ case class DenseMatrix @Since("1.3.0")(
     new newlinalg.DenseMatrix(numRows, numCols, values, isTransposed)
   }
 
-  override def bloomFilter: BloomFilter[Double] = {
+  lazy val bloomFilter: BloomFilter[Double] = {
     val bloom: BloomFilter[Double] = new FilterBuilder()
       .expectedElements(1000000)
       .size(10000)
@@ -420,7 +420,7 @@ case class DenseMatrix @Since("1.3.0")(
     bloom
   }
 
-  override def cell2Index: Multimap[Double, (Int, Int)] = {
+  lazy val cell2Index: Multimap[Double, (Int, Int)] = {
     val cellIdx: Multimap[Double, (Int, Int)] = ArrayListMultimap.create()
     for (i <- 0 until numRows) {
       for (j <- 0 until numCols) {
@@ -754,7 +754,7 @@ case class SparseMatrix @Since("1.3.0")(
     new newlinalg.SparseMatrix(numRows, numCols, colPtrs, rowIndices, values, isTransposed)
   }
 
-  override def bloomFilter: BloomFilter[Double] = {
+  lazy val bloomFilter: BloomFilter[Double] = {
     val bloom: BloomFilter[Double] = new FilterBuilder()
       .expectedElements(1000000)
       .size(10000)
@@ -763,10 +763,10 @@ case class SparseMatrix @Since("1.3.0")(
     for (x <- values) {
       bloom.add(x)
     }
-    bloom.intersect()
+    bloom
   }
 
-  override def cell2Index: Multimap[Double, (Int, Int)] = {
+  lazy val cell2Index: Multimap[Double, (Int, Int)] = {
     val cellIdx: Multimap[Double, (Int, Int)] = ArrayListMultimap.create()
     if (!isTransposed) { // CSC format
       for (j <- 0 until numCols) {

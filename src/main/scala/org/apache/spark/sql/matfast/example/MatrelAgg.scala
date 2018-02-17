@@ -38,8 +38,8 @@ object MatrelAgg {
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.shuffle.consolidateFiles", "true")
       .config("spark.shuffle.compress", "false")
-      .config("spark.executor.cores", "16")
-      .config("spark.cores.max", "80")
+      .config("spark.executor.cores", "1")
+      .config("spark.cores.max", "5")
       .config("spark.executor.memory", "24g")
       .config("spark.default.parallelism", "200")
       .config("spark.rpc.message.maxSize", "1000")
@@ -59,7 +59,6 @@ object MatrelAgg {
     val matrix = matrixRDD.toDS().cache()
     import spark.MatfastImplicits._
     val G = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)
-    G.rdd.count()
     G.selectCell(dim, dim, 10000, 1, 1).rdd.saveAsTextFile(savePath)
     //matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000).trace(dim, dim).rdd.saveAsTextFile(savePath)
     /*val GG = matrix.t().matrixMultiply(dim, dim, matrix, dim, dim, 10000)

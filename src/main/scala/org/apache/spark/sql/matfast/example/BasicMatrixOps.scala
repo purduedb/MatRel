@@ -422,7 +422,7 @@ object BasicMatrixOps {
       Array[Int](1, 0), Array[Double](4, 2))
     val mat1 = Seq(MatrixBlock(0, 0, b1), MatrixBlock(1, 1, b2)).toDS()
     val mat2 = Seq(MatrixBlock(0, 0, b3), MatrixBlock(0, 1, b4), MatrixBlock(1, 1, s1)).toDS()
-    mat1.joinOnValues(4, 4, mat2, 4, 4,
+    mat1.joinOnValues(4, 4, false, mat2, 4, 4, false,
       (a: Double, b: Double) => a, 2).rdd.foreach { row =>
       val idx = (row.getInt(0), row.getInt(1), row.getInt(2), row.getInt(3))
       // scalastyle:off

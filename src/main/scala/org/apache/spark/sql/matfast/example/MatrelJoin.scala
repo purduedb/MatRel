@@ -92,8 +92,8 @@ object MatrelJoin {
     import spark.MatfastImplicits._
     //mat1.joinOnSingleIndex(dim1, dim1, isLeftSparse, mat2, dim2, dim2, isRightSparse, 3,
     //  (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
-    mat1.joinOnValues(dim1, dim1, mat2, dim2, dim2,
-      (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)
+    mat1.joinOnValues(dim1, dim1, isLeftSparse, mat2, dim2, dim2, isRightSparse,
+      (x: Double, y: Double) => x * y, 500).rdd.saveAsTextFile(savePath)
     /*mat1.crossProduct(dim1, dim1, isLeftSparse,
       mat2, dim2, dim2, isRightSparse,
       (x: Double, y: Double) => x * y, 1000).rdd.saveAsTextFile(savePath)*/
@@ -111,7 +111,7 @@ object MatrelJoin {
       }
     }.filter(x => x.i >= 0)
     val dim = math.max(entries.map(x => x.i).max, entries.map(x => x.j).max) + 1
-    val blkSize = 1000
+    val blkSize = 500
     val coordinateMatrix = new CooMatrix(entries, dim, dim)
     //val blk_num = math.ceil(dim * 1.0 / blkSize).toInt
     //val blkCyclic = new BlockCyclicPartitioner(blk_num, blk_num, blkSize, blkSize)
@@ -124,7 +124,7 @@ object MatrelJoin {
   def getDenseBlockMatrixRDD(spark: MatfastSession, graphname: String): (Long, RDD[MatrixBlock]) = {
     val lines = spark.sparkContext.textFile(graphname, 8)
     val rowMat = new RowMatrix(lines)
-    val blkSize = 1000
+    val blkSize = 500
     val dimRdd = rowMat.toBlockMatrixRDD(blkSize)
     val dim = dimRdd._1
     //val blk_num = math.ceil(dim * 1.0 / blkSize).toInt

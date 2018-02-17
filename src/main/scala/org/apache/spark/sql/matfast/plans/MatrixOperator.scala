@@ -346,9 +346,11 @@ case class CrossProductOperator(leftChild: LogicalPlan,
 case class JoinOnValuesOperator(leftChild: LogicalPlan,
                                 leftRowNum: Long,
                                 leftColNum: Long,
+                                isLeftSparse: Boolean,
                                 rightChild: LogicalPlan,
                                 rightRowNum: Long,
                                 rightColNum: Long,
+                                isRightSparse: Boolean,
                                 mergeFunc: (Double, Double) => Double,
                                 blkSize: Int) extends BinaryNode {
 
@@ -427,4 +429,39 @@ case class GroupBy4DTensorOperator(child: LogicalPlan,
                                    aggFunc: (Double, Double) => Double) extends UnaryNode {
 
   override def output: Seq[Attribute] = child.output
+}
+
+case class MatrixElementUDFOperator(child: LogicalPlan,
+                          udf: Double => Double) extends UnaryNode {
+  override def output: Seq[Attribute] = child.output
+}
+
+case class MatrixDivideColumnVector(leftChild: LogicalPlan,
+                                    leftRowNum: Long,
+                                    leftColNum: Long,
+                                    rightChild: LogicalPlan,
+                                    rightRowNum: Long,
+                                    rightColNum: Long,
+                                    blkSize: Int) extends BinaryNode {
+
+  override def output: Seq[Attribute] = leftChild.output
+
+  override def left: LogicalPlan = leftChild
+
+  override def right: LogicalPlan = rightChild
+}
+
+case class MatrixDivideRowVector(leftChild: LogicalPlan,
+                                 leftRowNum: Long,
+                                 leftColNum: Long,
+                                 rightChild: LogicalPlan,
+                                 rightRowNum: Long,
+                                 rightColNum: Long,
+                                 blkSize: Int) extends BinaryNode {
+
+  override def output: Seq[Attribute] = leftChild.output
+
+  override def left: LogicalPlan = leftChild
+
+  override def right: LogicalPlan = rightChild
 }

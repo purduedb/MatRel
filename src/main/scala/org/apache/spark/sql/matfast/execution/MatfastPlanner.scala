@@ -477,10 +477,10 @@ object MatrixOperators extends Strategy {
     right, rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize) =>
       CrossProductExecution(planLater(left), leftRowNum, leftColNum, isLeftSparse,
         planLater(right), rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize) :: Nil
-    case JoinOnValuesOperator(left, leftRowNum, leftColNum,
-    right, rightRowNum, rightColNum, mergeFunc, blkSize) =>
-      JoinOnValuesExecution(planLater(left), leftRowNum, leftColNum,
-        planLater(right), rightRowNum, rightColNum, mergeFunc, blkSize) :: Nil
+    case JoinOnValuesOperator(left, leftRowNum, leftColNum, isLeftSparse,
+    right, rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize) =>
+      JoinOnValuesExecution(planLater(left), leftRowNum, leftColNum, isLeftSparse,
+        planLater(right), rightRowNum, rightColNum, isRightSparse, mergeFunc, blkSize) :: Nil
     case JoinIndexValueOperator(left, leftRowNum, leftColNum,
     right, rightRowNum, rightColNum, mode, mergeFunc, blkSize) =>
       JoinIndexValueExecution(planLater(left), leftRowNum, leftColNum,
@@ -491,6 +491,16 @@ object MatrixOperators extends Strategy {
         planLater(right), rightRowNum, rightColNum, isRightSparse, mode, mergeFunc, blkSize) :: Nil
     case GroupBy4DTensorOperator(ch, dims, aggFunc) =>
       GroupBy4DTensorExecution(planLater(ch), dims, aggFunc) :: Nil
+    case MatrixElementUDFOperator(ch, udf) =>
+      MatrixElementUDFExecution(planLater(ch), udf) :: Nil
+    case MatrixDivideColumnVector(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, blkSize) =>
+      MatrixDivideColumnVectorExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
+    case MatrixDivideRowVector(left, leftRowNum, leftColNum,
+    right, rightRowNum, rightColNum, blkSize) =>
+      MatrixDivideRowVectorExecution(planLater(left), leftRowNum, leftColNum,
+        planLater(right), rightRowNum, rightColNum, blkSize) :: Nil
     case _ => Nil
   }
 }
